@@ -28,6 +28,22 @@ Full paramater finetuning is feasible with 8 H100 GPUs, using `ZeRO3` and `Offlo
 accelerate launch --config_file recipes/accelerate_configs/zero3_offload.yaml aria/train.py --config examples/refcoco/config_full.yaml --output_dir [YOUR_OUT_DIR]
 ```
 
+# Inference
+We provide an [infernece script](./inference.py) to predict bounding box coordinates according to the input description of reference object, as shown:
+![](../../assets/refcoco_example1.png)
+
+Running:
+```bash
+CUDA_VISIBIE_DEVICES=0 python examples/refcoco/inference.py \
+    --base_model_path [YOUR_ARIA_PATH] \
+    --tokenizer_path [YOUR_ARIA_PATH] \
+    --peft_model_path [YOUR_LORA_PATH] \
+    --max_image_size 980 \
+    --vis_bbox
+```
+
+
+
 # Evaluation and Results
 After modifying the dataset paths in [RefCOCO-Evaluation](../../examples/refcoco/evaluation.py#L47), run:
 ```bash
