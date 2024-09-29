@@ -172,12 +172,7 @@ class AriaForConditionalGeneration(AriaPretrainedModel):
         Args:
             value: The z-loss coefficient value to set.
         """
-        if hasattr(self.language_model, "set_z_loss_coeff"):
-            self.language_model.set_z_loss_coeff(value)
-        else:
-            logger.warning(
-                "The language model does not have a `set_z_loss_coeff` method. Ignore this warning if you are not using a MoYI model."
-            )
+        self.language_model.set_z_loss_coeff(value)
 
     def set_moe_aux_loss_coeff(self, value):
         """
@@ -186,12 +181,7 @@ class AriaForConditionalGeneration(AriaPretrainedModel):
         Args:
             value: The auxiliary loss coefficient value to set.
         """
-        if hasattr(self.language_model, "set_aux_loss_coeff"):
-            self.language_model.set_aux_loss_coeff(value)
-        else:
-            logger.warning(
-                "The language model does not have a `set_aux_loss_coeff` method. Ignore this warning if you are not using a MoYI model."
-            )
+        self.language_model.set_aux_loss_coeff(value)
 
     # copied from transformers.models.llava.modeling_llava.LlavaForConditionalGeneration
     def _merge_input_ids_with_image_features(
