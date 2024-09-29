@@ -111,6 +111,8 @@ def inference(
             temperature=0.9,
         )
         result = processor.batch_decode(output, skip_special_tokens=True)
+        prompt_len = len(prompt)
+        result = result[0][prompt_len:].replace("<|im_end|>", "")
 
     return result
 
