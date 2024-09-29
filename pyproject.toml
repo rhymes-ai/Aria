@@ -28,6 +28,7 @@ dev = [
     "black==24.8.0",
     "autoflake==2.3.1",
     "isort==5.13.2",
+    "pytest==8.3.3",
 ]
 vllm = [
     "vllm==0.6.2"
