@@ -1,3 +1,16 @@
+# Data Preparation
+Please download the dataset from [Huggingface Datasets](https://huggingface.co/datasets/rhymes-ai/NeXTVideo/tree/main) and put the dataset in the `./dataset/nextqa` directory, running:
+```bash
+python examples/download_data_hf.py --hf_root rhymes-ai/NeXTVideo --save_root ./dataset/nextqa
+```
+
+Then please unzip the `.zip` files(including images and videos) inside each sub-folder.
+```
+cd ./dataset/nextqa
+unzip NExTVideo.zip
+```
+
+
 # Training Configuration and Commands
 
 ## LoRA
