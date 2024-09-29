@@ -134,7 +134,7 @@ def main():
     )
     model = load_model(args.base_model_path, args.peft_model_path)
 
-    image_path = "./dataset/refcoco_sub30k/images/COCO_train2014_000000580957.jpg"
+    image_path = "./datasets/refcoco_sub30k/images/COCO_train2014_000000580957.jpg"
     prompt = "Given the image, provide the bounding box coordinate of the region this sentence describes:\n{}"
     reference_object = "white dish in the top right corner"
     result = inference(

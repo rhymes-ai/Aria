@@ -1,12 +1,12 @@
 # Data Preparation
-Please download the dataset from [Huggingface Datasets](https://huggingface.co/datasets/rhymes-ai/RefCOCO/tree/main) and put the dataset in the `./dataset/refcoco_sub30k` directory, running:
+Please download the dataset from [Huggingface Datasets](https://huggingface.co/datasets/rhymes-ai/RefCOCO/tree/main) and put the dataset in the `./datasets/refcoco_sub30k` directory, running:
 ```bash
-python examples/download_data_hf.py --hf_root rhymes-ai/RefCOCO --save_root ./dataset/refcoco_sub30k
+python examples/download_data_hf.py --hf_root rhymes-ai/RefCOCO --save_root ./datasets/refcoco_sub30k
 ```
 
 Then please unzip the `.zip` files(including images and videos) inside each sub-folder.
 ```
-cd ./dataset/refcoco_sub30k
+cd ./datasets/refcoco_sub30k
 unzip images.zip
 ```
 

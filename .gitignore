@@ -8,4 +8,4 @@ chartqa_result_*
 .vscode
 aria.egg-info/
 wandb
-dataset/
+datasets/

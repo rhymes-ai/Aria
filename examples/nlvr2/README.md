@@ -1,12 +1,12 @@
 # Data Preparation
-Please download the dataset from [Huggingface Datasets](https://huggingface.co/datasets/rhymes-ai/NLVR2/tree/main) and put the dataset in the `./dataset/nlvr2` directory, running:
+Please download the dataset from [Huggingface Datasets](https://huggingface.co/datasets/rhymes-ai/NLVR2/tree/main) and put the dataset in the `./datasets/nlvr2` directory, running:
 ```bash
-python examples/download_data_hf.py --hf_root rhymes-ai/NLVR2 --save_root ./dataset/nlvr2
+python examples/download_data_hf.py --hf_root rhymes-ai/NLVR2 --save_root ./datasets/nlvr2
 ```
 
 Then please unzip the `.zip` files(including images and videos) inside each sub-folder.
 ```
-cd ./dataset/nlvr2/images
+cd ./datasets/nlvr2/images
 unzip dev.zip
 cd train
 unzip train.part1.zip
