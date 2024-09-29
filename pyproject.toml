@@ -1,0 +1,42 @@
+[project]
+name = "aria"
+version = "0.1.0"
+description = ""
+authors = [
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch==2.4.0",
+    "torchvision==0.19.0",
+    "accelerate==0.34.1",
+    "deepspeed==0.15.0",
+    "peft==0.12.0",
+    "sentencepiece==0.2.0",
+    "transformers==4.45.0",
+    "trl==0.9.6",
+    "pillow==10.4.0",
+    "wandb==0.18.1",
+    "decord==0.6.0",
+    "tqdm==4.66.5",
+    "pandas==2.2.2",
+    "grouped_gemm==0.1.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black==24.8.0",
+    "autoflake==2.3.1",
+    "isort==5.13.2",
+]
+vllm = [
+    "vllm==0.6.2"
+]
+
+[build-system]
+requires = ["setuptools>=45", "setuptools-scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aria*"]

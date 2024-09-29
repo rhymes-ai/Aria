@@ -1,0 +1,10 @@
+.hypothesis
+__pycache__/
+.venv/
+out
+draft_scripts/
+models/
+chartqa_result_*
+.vscode
+aria.egg-info/
+wandb
