@@ -98,6 +98,11 @@ class AriaVisionProcessor(BaseImageProcessor):
         self.min_image_size = min_image_size
         self.image_mean = image_mean
         self.image_std = image_std
+        self.auto_map = {
+            "AutoProcessor": "processing_aria.AriaProcessor",
+            "AutoImageProcessor": "vision_processor.AriaVisionProcessor",
+        }
+
         # we make the transform a property so that it is lazily initialized,
         # this could avoid the error "TypeError: Object of type Normalize is not JSON serializable"
         # when we used save_pretrained or from_pretrained.
