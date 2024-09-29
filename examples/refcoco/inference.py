@@ -1,14 +1,13 @@
 import argparse
+import re
 
+import matplotlib.pyplot as plt
 import torch
 from peft import PeftConfig, PeftModel
 from PIL import Image, ImageDraw
 
 from aria.lora.layers import GroupedGemmLoraLayer
 from aria.model import AriaForConditionalGeneration, AriaProcessor, GroupedGEMM
-
-import matplotlib.pyplot as plt
-import re
 
 
 def parse_arguments():
@@ -24,7 +23,11 @@ def parse_arguments():
         help="Maximum size of the image to be processed",
         default=980,
     )
-    parser.add_argument("--vis_bbox", action='store_true', help="Whether to draw the bounding box on the image")
+    parser.add_argument(
+        "--vis_bbox",
+        action="store_true",
+        help="Whether to draw the bounding box on the image",
+    )
     return parser.parse_args()
 
 
@@ -99,6 +102,7 @@ def inference(
 
     return result
 
+
 def parse_bbox(model_output, img_wh):
     PATTERN = re.compile(r"\((.*?)\),\((.*?)\)")
     predict_bbox = re.findall(PATTERN, model_output)
@@ -112,7 +116,7 @@ def parse_bbox(model_output, img_wh):
             predict_bbox = (x1, y1, x2, y2)
     except:
         predict_bbox = (0.0, 0.0, 0.0, 0.0)
-    
+
     img_w, img_h = img_wh
     return (
         int(predict_bbox[0] / 999 * img_w),
@@ -120,6 +124,7 @@ def parse_bbox(model_output, img_wh):
         int(predict_bbox[2] / 999 * img_w),
         int(predict_bbox[3] / 999 * img_h),
     )
+
 
 def main():
     args = parse_arguments()
@@ -133,7 +138,11 @@ def main():
     prompt = "Given the image, provide the bounding box coordinate of the region this sentence describes:\n{}"
     reference_object = "white dish in the top right corner"
     result = inference(
-        image_path, prompt.format(reference_object), model, processor, args.max_image_size
+        image_path,
+        prompt.format(reference_object),
+        model,
+        processor,
+        args.max_image_size,
     )
     print(f"Model Output: {result}")
 
@@ -151,16 +160,16 @@ def main():
 
         plt.subplot(1, 2, 1)
         plt.imshow(image)
-        plt.title('original image')
-        plt.axis('off')
+        plt.title("original image")
+        plt.axis("off")
 
         plt.subplot(1, 2, 2)
         plt.imshow(predicted_image)
         plt.title(reference_object)
-        plt.axis('off')
+        plt.axis("off")
 
         plt.tight_layout()
-        plt.savefig('./assets/refcoco_example1.png')
+        plt.savefig("./assets/refcoco_example1.png")
         # plt.show()
 
 
