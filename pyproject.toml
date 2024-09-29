@@ -21,6 +21,7 @@ dependencies = [
     "tqdm==4.66.5",
     "pandas==2.2.2",
     "grouped_gemm==0.1.6",
+    "matplotlib==3.9.2",
 ]
 
 [project.optional-dependencies]
