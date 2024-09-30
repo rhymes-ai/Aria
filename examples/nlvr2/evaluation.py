@@ -62,7 +62,7 @@ class NLVR2ValDataset(Dataset):
 
 
 def load_model_and_tokenizer(args):
-    processor = AriaVisionProcessor(image_max_size=args.image_size)
+    processor = AriaVisionProcessor(max_image_size=args.image_size)
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_path, use_fast=False, padding_side="left"
     )
