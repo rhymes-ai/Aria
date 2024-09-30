@@ -42,6 +42,13 @@ def parse_arguments():
         help="Maximum size of the image to be processed",
         default=980,
     )
+    parser.add_argument(
+        "--split_image",
+        type=bool,
+        help="Whether to split the image into patches",
+        action="store_true",
+        default=False,
+    )
     return parser.parse_args()
 
 
@@ -65,7 +72,9 @@ def load_model(base_model_path, peft_model_path=None):
     return model
 
 
-def prepare_input(image_path, prompt, processor: AriaProcessor, max_image_size):
+def prepare_input(
+    image_path, prompt, processor: AriaProcessor, max_image_size, split_image
+):
     image = Image.open(image_path)
 
     messages = [
@@ -85,6 +94,7 @@ def prepare_input(image_path, prompt, processor: AriaProcessor, max_image_size):
         images=image,
         return_tensors="pt",
         max_image_size=max_image_size,
+        split_image=split_image,
     )
 
     return inputs
@@ -96,8 +106,9 @@ def inference(
     model: AriaForConditionalGeneration,
     processor: AriaProcessor,
     max_image_size,
+    split_image,
 ):
-    inputs = prepare_input(image_path, prompt, processor, max_image_size)
+    inputs = prepare_input(image_path, prompt, processor, max_image_size, split_image)
     inputs["pixel_values"] = inputs["pixel_values"].to(model.dtype)
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
@@ -126,7 +137,12 @@ def main():
     model = load_model(args.base_model_path, args.peft_model_path)
 
     result = inference(
-        args.image_path, args.prompt, model, processor, args.max_image_size
+        args.image_path,
+        args.prompt,
+        model,
+        processor,
+        args.max_image_size,
+        args.split_image,
     )
     print(result)
 
