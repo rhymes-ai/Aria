@@ -90,7 +90,7 @@ def load_model_and_tokenizer(args):
 
 def process_batch(model, tokenizer, inputs, original_batch, prompts):
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
-    with torch.inference_mode():
+    with torch.inference_mode(), torch.cuda.amp.autocast(dtype=torch.bfloat16):
         output = model.generate(
             **inputs,
             max_new_tokens=50,
