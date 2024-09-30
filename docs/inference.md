@@ -85,6 +85,7 @@ pip install -e .[vllm]
 ### How to Use:
 ```python
 from PIL import Image
+from transformers import AutoTokenizer
 from vllm import LLM, ModelRegistry, SamplingParams
 from vllm.model_executor.models import _MULTIMODAL_MODELS
 
@@ -102,33 +103,52 @@ _MULTIMODAL_MODELS["AriaForConditionalGeneration"] = (
 def main():
     llm = LLM(
         model="rhymes-ai/Aria",
-        tokenizer="rhymes-ai/Aria",
         dtype="bfloat16",
         limit_mm_per_prompt={"image": 256},
         enforce_eager=True,
-        tokenizer_mode="slow",
         trust_remote_code=True,
+        skip_tokenizer_init=True,
     )
 
-    prompt = "Question: Compare Image 1 and image 2, tell me about the differences between image 1 and image 2.\nImage 1\n<fim_prefix><|img|><fim_suffix>\nImage 2\n<fim_prefix><|img|><fim_suffix> Answer: "
+    tokenizer = AutoTokenizer.from_pretrained(
+        "rhymes-ai/Aria", trust_remote_code=True, use_fast=False
+    )
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Compare Image 1 and image 2, tell me about the differences between image 1 and image 2.\nImage 1\n",
+                },
+                {"type": "image"},
+                {"type": "text", "text": "\nImage 2\n"},
+                {"type": "image"},
+            ],
+        }
+    ]
+
+    message = tokenizer.apply_chat_template(messages, add_generation_prompt=True)
 
     outputs = llm.generate(
         {
-            "prompt": prompt,
+            "prompt_token_ids": message,
             "multi_modal_data": {
                 "image": [
                     Image.open("assets/princess1.jpg"),
                     Image.open("assets/princess2.jpg"),
                 ],
-                "max_image_size": 980,
+                "max_image_size": 980,  # [Optional] The max image patch size, default `980`
+                "split_image": True,  # [Optional] whether to split the images, default `False`
             },
         },
         sampling_params=SamplingParams(max_tokens=200, top_k=1),
     )
 
     for o in outputs:
-        generated_text = o.outputs[0].text
-        print(generated_text)
+        generated_tokens = o.outputs[0].token_ids
+        print(tokenizer.decode(generated_tokens))
 
 
 if __name__ == "__main__":

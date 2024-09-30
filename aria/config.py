@@ -65,6 +65,10 @@ class AriaModelConfig(ModelConfig):
             "choices": [490, 980],
         },
     )
+    split_image: bool = field(
+        default=False,
+        metadata={"help": "Whether to split the image into smaller patches."},
+    )
 
     def __post_init__(self):
         super().__post_init__()

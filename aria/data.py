@@ -19,7 +19,7 @@
 
 import os
 import warnings
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 import torch
 from datasets import DatasetDict, concatenate_datasets, load_dataset
@@ -29,6 +29,7 @@ from datasets.features import Features, Sequence, Value
 def apply_chat_template_and_tokenize(
     messages_batch: List[List[Dict]],
     tokenizer,
+    num_image_crop: Iterable[torch.Tensor] = iter([]),
 ):
     IGNORE_TOKEN_ID = -100
     im_start_tokens = tokenizer("<|im_start|>").input_ids
@@ -41,7 +42,7 @@ def apply_chat_template_and_tokenize(
         if content["type"] == "text":
             return content["text"]
         elif content["type"] == "image":
-            return "<fim_prefix><|img|><fim_suffix>"
+            return "<fim_prefix>" + "<|img|>" * next(num_image_crop) + "<fim_suffix>"
         else:
             raise ValueError(f"Unknown content type {content['type']} in message")
 

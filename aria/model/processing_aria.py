@@ -18,6 +18,7 @@
 # under the License.
 
 import inspect
+import re
 from typing import List, Optional, Union
 
 from transformers import AutoTokenizer, BatchFeature
@@ -61,7 +62,7 @@ class AriaProcessor(ProcessorMixin):
         super().__init__(chat_template=chat_template)
 
         if image_processor is None:
-            self.image_processor = AriaVisionProcessor(image_max_size=patch_size)
+            self.image_processor = AriaVisionProcessor(max_image_size=patch_size)
         else:
             self.image_processor = image_processor
 
@@ -87,6 +88,7 @@ class AriaProcessor(ProcessorMixin):
         truncation: Union[bool, str, TruncationStrategy] = None,
         max_length: Optional[int] = None,
         max_image_size: Optional[int] = 980,
+        split_image: Optional[bool] = False,
         return_tensors: Optional[Union[str, TensorType]] = TensorType.PYTORCH,
     ) -> BatchFeature:
         """
@@ -114,6 +116,8 @@ class AriaProcessor(ProcessorMixin):
                 Maximum length of the returned list and optionally padding length (see above).
             max_image_size (`int`, *optional*):
                 Maximum size of the image to be processed.
+            split_image (`bool`, *optional*):
+                Whether to split the image into patches before processing.
             truncation (`bool`, *optional*):
                 Activates truncation to cut input sequences longer than `max_length` to `max_length`.
             return_tensors (`str` or [`~utils.TensorType`], *optional*):
@@ -134,15 +138,6 @@ class AriaProcessor(ProcessorMixin):
             - **pixel_values** -- Pixel values to be fed to a model. Returned when `images` is not `None`.
             - **pixel_mask** -- Pixel mask to be fed to a model. Returned when `images` is not `None`.
         """
-        if images is not None:
-            image_inputs = self.image_processor(
-                images,
-                return_tensors=return_tensors,
-                max_image_size=max_image_size,
-            )
-        else:
-            image_inputs = {}
-
         if isinstance(text, str):
             text = [text]
         elif not isinstance(text, list) and not isinstance(text[0], str):
@@ -150,7 +145,27 @@ class AriaProcessor(ProcessorMixin):
                 "Invalid input text. Please provide a string, or a list of strings"
             )
 
-        prompt_strings = text
+        if images is not None:
+            image_inputs = self.image_processor(
+                images,
+                return_tensors=return_tensors,
+                max_image_size=max_image_size,
+                split_image=split_image,
+            )
+            # expand the image_token according to the num_crops of image
+            prompt_strings = []
+            crop_iter = iter(image_inputs.pop("num_crops"))
+            for prompt in text:
+                prompt_strings.append(
+                    re.sub(
+                        re.escape(self.image_token),
+                        lambda _: next(crop_iter) * self.image_token,
+                        prompt,
+                    )
+                )
+
+        else:
+            image_inputs = {}
 
         text_inputs = self.tokenizer(
             prompt_strings,

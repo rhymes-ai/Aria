@@ -20,11 +20,11 @@ import math
 import os
 from typing import Iterable, List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
-from torch import nn
 from transformers import LlamaConfig
 from transformers.utils import logging
 from vllm.attention import AttentionMetadata
@@ -863,6 +863,95 @@ def build_mm_projector(config: AriaConfig):
     )
 
 
+def _select_best_resolution(
+    img_width: int, img_height: int, target_ratios: List[List[int]], patch_size: int
+):
+    """
+    Selects the best resolution from a list of possible resolutions based on the original size.
+
+    Args:
+        img_width: the original widths of images.
+        img_height: the original heights of images.
+        target_ratios (2d numpy array): dimension size (M,2)
+        patch_size (int): image patch size
+
+    Returns:
+        tuple: The best fit resolution in the format (width, height).
+    """
+
+    aspect_ratio = img_width / img_height
+    best_ratio_diff = float("inf")
+    best_ratio_w, best_ratio_h = 1, 1
+    area = np.int32(img_height) * np.int32(img_height)
+    for ratio in target_ratios:
+        target_aspect_ratio = ratio[0] / ratio[1]
+        ratio_diff = abs(aspect_ratio - target_aspect_ratio)
+        if ratio_diff < best_ratio_diff:
+            best_ratio_diff = ratio_diff
+            best_ratio_w, best_ratio_h = ratio[0], ratio[1]
+        elif (
+            ratio_diff == best_ratio_diff
+            and area > 0.5 * patch_size * patch_size * ratio[0] * ratio[1]
+        ):
+            best_ratio_w, best_ratio_h = ratio[0], ratio[1]
+
+    return best_ratio_w, best_ratio_h
+
+
+def split_image(
+    image: Image.Image,
+    split_image: bool,
+    split_ratio: List[List[int]] = [
+        [1, 1],
+        [1, 2],
+        [1, 3],
+        [1, 4],
+        [2, 2],
+        [2, 1],
+        [3, 1],
+        [4, 1],
+    ],
+    patch_size: int = 980,
+) -> List[Image.Image]:
+    """
+    Split image into multiple patches
+
+    Args:
+        image (PIL.Image): Input image.
+        split_image (bool): Whether to split the image into patches.
+        split_ratio (2d numpy array): dimension size (M,2)
+        patch_size (int): image patch size
+
+    Returns:
+        List[PIL.Image]: List of splitted images.
+    """
+    if split_image:
+        ratio_width, ratio_height = _select_best_resolution(
+            image.width, image.height, split_ratio, patch_size
+        )
+        resize_width = patch_size * ratio_width
+        resize_height = patch_size * ratio_height
+        blocks = ratio_width * ratio_height
+        resized_img = image.resize((resize_width, resize_height))
+        processed_images = []
+        for i in range(blocks):
+            box = (
+                (i % (resize_width // patch_size)) * patch_size,
+                (i // (resize_width // patch_size)) * patch_size,
+                ((i % (resize_width // patch_size)) + 1) * patch_size,
+                ((i // (resize_width // patch_size)) + 1) * patch_size,
+            )
+            # split the image
+            split_img = resized_img.crop(box)
+            processed_images.append(split_img)
+        assert len(processed_images) == blocks
+        if len(processed_images) != 1:
+            processed_images.insert(0, image)
+        return processed_images
+    else:
+        return [image]
+
+
 def get_max_multimodal_tokens(ctx):
     return max(ctx.model_config.hf_config.image_size2tokens.values())
 
@@ -876,7 +965,7 @@ def input_mapper_for_aria(ctx, data):
     The only different is we would like to support runtime max_image_size adjustment.
     """
     model_config = ctx.model_config
-    image_max_size = getattr(model_config.multimodal_config, "max_image_size", 980)
+    max_image_size = getattr(model_config.multimodal_config, "max_image_size", 980)
 
     # PIL image
     if isinstance(data, Image.Image) or is_list_of(data, Image.Image):
@@ -889,8 +978,9 @@ def input_mapper_for_aria(ctx, data):
             )
         try:
             batch_data = image_processor.preprocess(
-                data, image_max_size=image_max_size, return_tensors="pt"
+                data, max_image_size=max_image_size, return_tensors="pt"
             ).data
+            batch_data.pop("num_crops")
         except Exception:
             logger.error("Failed to process image (%s)", data)
             raise
@@ -916,26 +1006,38 @@ def input_processor(ctx, llm_inputs):
     hf_config = model_config.hf_config
 
     # prepare image tokens, the max_image_size is used to determine the number of patch_size for every image
-    image_max_size = multi_modal_data.pop("max_image_size", 980)
-    if isinstance(image_max_size, int) or isinstance(image_max_size, float):
-        num_images = (
-            len(multi_modal_data["image"])
-            if isinstance(multi_modal_data["image"], list)
-            else 1
-        )
-        image_max_size = [image_max_size] * num_images
+    max_image_size = multi_modal_data.pop("max_image_size", 980)
+    _split_image = multi_modal_data.pop("split_image", False)
+
+    assert isinstance(max_image_size, int) or isinstance(
+        max_image_size, float
+    ), "max_image_size should be float or int"
+    images = (
+        multi_modal_data["image"]
+        if isinstance(multi_modal_data["image"], list)
+        else [multi_modal_data["image"]]
+    )
+    num_crops = []
+    splitted_images = []
+    for image in images:
+        splitted_image = split_image(image, _split_image, patch_size=max_image_size)
+        splitted_images.extend(splitted_image)
+        num_crops.append(len(splitted_image))
+    max_image_size = [max_image_size] * len(images)
+    # reassign the image because we might split them into mini-patches
+    multi_modal_data["image"] = splitted_images
 
     # Mapping the image patch size to the corresponding number of tokens for each image
     image_feature_sizes = []
-    for image_size in image_max_size:
+    for image_size, num_crop in zip(max_image_size, num_crops):
         assert (
             image_size in hf_config.image_size2tokens
         ), f"Invalid image size: {image_size}, available options: {list(hf_config.image_size2tokens.keys())}"
-        image_feature_sizes.append(hf_config.image_size2tokens[image_size])
+        image_feature_sizes.append(hf_config.image_size2tokens[image_size] * num_crop)
 
-    # Set up the image_max_size in the RuntimeContext for the image processor
+    # Set up the max_image_size and split_image in the RuntimeContext for the image processor
     # TODO: Supports dynamic image size support
-    setattr(model_config.multimodal_config, "max_image_size", max(image_max_size))
+    setattr(model_config.multimodal_config, "max_image_size", max(max_image_size))
 
     new_prompt, new_token_ids = repeat_and_pad_placeholder_tokens(
         tokenizer,
