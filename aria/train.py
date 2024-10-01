@@ -83,7 +83,7 @@ def setup_model_and_tokenizer(model_config):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.unk_token
 
-    processor = AriaVisionProcessor(image_max_size=model_config.max_image_size)
+    processor = AriaVisionProcessor(max_image_size=model_config.max_image_size)
 
     return model, tokenizer, processor
 
@@ -114,7 +114,7 @@ def setup_peft(model, model_config):
     return model
 
 
-def collate_fn(examples, tokenizer, processor):
+def collate_fn(examples, tokenizer, processor, split_image: bool = False):
     images = []
     messages = []
     for example in examples:
@@ -178,13 +178,15 @@ def collate_fn(examples, tokenizer, processor):
         Image.open(image).convert("RGB") if isinstance(image, str) else image
         for image in images
     ]
+    image_inputs = processor(images, split_image=split_image)
 
     batch = apply_chat_template_and_tokenize(
         messages,
         tokenizer,
+        iter(image_inputs.pop("num_crops")),
     )
-    images = processor(images)
-    batch.update(images)
+
+    batch.update(image_inputs)
 
     batch["pixel_values"] = batch["pixel_values"].to(torch.bfloat16)
 
@@ -213,7 +215,9 @@ def main():
     trainer = SFTTrainer(
         model=model,
         args=training_args,
-        data_collator=lambda examples: collate_fn(examples, tokenizer, processor),
+        data_collator=lambda examples: collate_fn(
+            examples, tokenizer, processor, model_config.split_image
+        ),
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,

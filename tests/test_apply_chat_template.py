@@ -26,7 +26,9 @@ def test_apply_chat_template_single_user_message(tokenizer):
         }
     ]
     expected_output = "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n"
-    res = apply_chat_template_and_tokenize([messages], tokenizer=tokenizer)
+    res = apply_chat_template_and_tokenize(
+        [messages], num_image_crop=iter([1]), tokenizer=tokenizer
+    )
     input_ids = res["input_ids"]
     input_str = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
     assert input_str == expected_output
@@ -64,7 +66,9 @@ def test_apply_chat_template_multiple_messages(tokenizer):
         },
     ]
     expected_output = "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n<|im_start|>assistant\nSylvie Covey<|im_end|>\n"
-    res = apply_chat_template_and_tokenize([messages], tokenizer=tokenizer)
+    res = apply_chat_template_and_tokenize(
+        [messages], num_image_crop=iter([1]), tokenizer=tokenizer
+    )
     input_ids = res["input_ids"]
     input_str = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
     assert input_str == expected_output
@@ -118,7 +122,9 @@ def test_apply_chat_template_multi_round_messages(tokenizer):
         },
     ]
     expected_output = "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n<|im_start|>assistant\nSylvie Covey<|im_end|>\n<|im_start|>user\nWhat is the title of this book?<|im_end|>\n<|im_start|>assistant\nModern Printmaking: A Guide to Traditional and Digital Techniques<|im_end|>\n"
-    res = apply_chat_template_and_tokenize([messages], tokenizer=tokenizer)
+    res = apply_chat_template_and_tokenize(
+        [messages], num_image_crop=iter([1]), tokenizer=tokenizer
+    )
     input_ids = res["input_ids"]
     input_str = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
     assert input_str == expected_output
@@ -172,7 +178,9 @@ def test_apply_chat_template_batch_messages(tokenizer):
         ],
     ]
 
-    res = apply_chat_template_and_tokenize(messages_batch, tokenizer=tokenizer)
+    res = apply_chat_template_and_tokenize(
+        messages_batch, num_image_crop=iter([1, 1]), tokenizer=tokenizer
+    )
     input_ids = res["input_ids"]
 
     expected_output = [
