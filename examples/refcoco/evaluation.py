@@ -9,7 +9,6 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision.ops.boxes import box_area
 from tqdm import tqdm
-from transformers import AutoTokenizer
 
 from aria.lora.layers import GroupedGemmLoraLayer
 from aria.model import AriaForConditionalGeneration, AriaProcessor, GroupedGEMM
@@ -66,7 +65,7 @@ def load_model_and_tokenizer(args):
     processor = AriaProcessor.from_pretrained(
         args.base_model_path, tokenizer_path=args.tokenizer_path
     )
-    processor.tokenizer.padding_side="left"
+    processor.tokenizer.padding_side = "left"
     tokenizer = processor.tokenizer
 
     model = AriaForConditionalGeneration.from_pretrained(
@@ -100,8 +99,10 @@ def process_batch(model, tokenizer, inputs, original_batch, prompts):
         )
 
     for i, prompt in enumerate(prompts):
-        prompt_len = len(inputs['input_ids'][i])
-        output_text = tokenizer.decode(output[i][prompt_len:], skip_special_tokens=True).replace("<|im_end|>", "")
+        prompt_len = len(inputs["input_ids"][i])
+        output_text = tokenizer.decode(
+            output[i][prompt_len:], skip_special_tokens=True
+        ).replace("<|im_end|>", "")
         original_batch[i]["pred"] = output_text
 
     return original_batch
@@ -117,7 +118,8 @@ def collate_fn(batch, processor, tokenizer):
         messages.append(item["messages"])
 
     texts = [
-        processor.apply_chat_template(msg, add_generation_prompt=True) for msg in messages
+        processor.apply_chat_template(msg, add_generation_prompt=True)
+        for msg in messages
     ]
     inputs = processor(
         text=texts,
