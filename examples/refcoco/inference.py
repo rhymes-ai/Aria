@@ -87,7 +87,7 @@ def inference(
     inputs["pixel_values"] = inputs["pixel_values"].to(model.dtype)
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
-    with torch.inference_mode():
+    with torch.inference_mode(), torch.cuda.amp.autocast(dtype=torch.bfloat16):
         output = model.generate(
             **inputs,
             max_new_tokens=500,
