@@ -70,10 +70,11 @@ class AriaProcessor(ProcessorMixin):
             self.tokenizer = AutoTokenizer.from_pretrained(
                 tokenizer, trust_remote_code=True, use_fast=False
             )
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.unk_token
         else:
             self.tokenizer = tokenizer
+
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.unk_token
 
         self.image_token = image_token
 
