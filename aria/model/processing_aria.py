@@ -166,6 +166,7 @@ class AriaProcessor(ProcessorMixin):
 
         else:
             image_inputs = {}
+            prompt_strings = text
 
         text_inputs = self.tokenizer(
             prompt_strings,
