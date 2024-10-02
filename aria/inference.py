@@ -121,11 +121,14 @@ def inference(
             do_sample=True,
             temperature=0.9,
         )
-        result = processor.batch_decode(output, skip_special_tokens=True)
-        prompt_len = len(prompt)
-        result = result[0][prompt_len:].replace("<|im_end|>", "")
 
-    return result
+    for i in range(inputs["input_ids"].shape[0]):
+        prompt_len = len(inputs["input_ids"][i])
+        output_text = tokenizer.decode(
+            output[i][prompt_len:], skip_special_tokens=True
+        ).replace("<|im_end|>", "")
+
+    return output_text
 
 
 def main():

@@ -1,20 +1,20 @@
 import argparse
 import json
 import os
+import random
 
+import numpy as np
 import torch
 from peft import PeftConfig, PeftModel
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from transformers import AutoTokenizer
 
-from aria.data import apply_chat_template
 from aria.load_video import load_video
 from aria.lora.layers import GroupedGemmLoraLayer
-from aria.model import AriaForConditionalGeneration, AriaVisionProcessor, GroupedGEMM
+from aria.model import AriaForConditionalGeneration, AriaProcessor, GroupedGEMM
 
 # Add command-line argument parsing
-parser = argparse.ArgumentParser(description="ChartQA Evaluation")
+parser = argparse.ArgumentParser(description="NextQA Evaluation")
 parser.add_argument(
     "--base_model_path", type=str, required=True, help="Path to the base model"
 )
@@ -60,16 +60,15 @@ class NextQA_Dataset(Dataset):
 
 
 def load_model_and_tokenizer(args):
-    processor = AriaVisionProcessor(max_image_size=args.image_size)
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer_path, use_fast=False, padding_side="left"
+    processor = AriaProcessor.from_pretrained(
+        args.base_model_path, tokenizer_path=args.tokenizer_path
     )
-    tokenizer.pad_token = tokenizer.pad_token or tokenizer.unk_token
+    processor.tokenizer.padding_side = "left"
+    tokenizer = processor.tokenizer
 
     model = AriaForConditionalGeneration.from_pretrained(
         args.base_model_path, device_map="auto", torch_dtype=torch.bfloat16
     ).eval()
-    model.pad_token_id = tokenizer.pad_token_id
 
     if args.peft_model_path:
         peft_config = PeftConfig.from_pretrained(args.peft_model_path)
@@ -88,18 +87,20 @@ def load_model_and_tokenizer(args):
 
 def process_batch(model, tokenizer, inputs, original_batch, prompts):
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    inputs["pixel_values"] = inputs["pixel_values"].to(model.dtype)
     with torch.inference_mode(), torch.cuda.amp.autocast(dtype=torch.bfloat16):
         output = model.generate(
             **inputs,
-            max_new_tokens=20,
+            max_new_tokens=50,
             stop_strings=["<|im_end|>"],
             tokenizer=tokenizer,
         )
-        result = tokenizer.batch_decode(output, skip_special_tokens=True)
 
     for i, prompt in enumerate(prompts):
-        prompt_len = len(prompt)
-        output_text = result[i][prompt_len:].replace("<|im_end|>", "")
+        prompt_len = len(inputs["input_ids"][i])
+        output_text = tokenizer.decode(
+            output[i][prompt_len:], skip_special_tokens=True
+        ).replace("<|im_end|>", "")
         original_batch[i]["pred"] = output_text
 
     return original_batch
@@ -122,14 +123,17 @@ def collate_fn(batch, processor, tokenizer):
                         message["content"].insert(cont_idx + img_i, insert_item)
         messages.append(item["messages"])
 
-    images = processor(images)
-    images["pixel_values"] = images["pixel_values"].to(torch.bfloat16)
-
-    messages = [
-        apply_chat_template(msg, add_generation_prompt=True) for msg in messages
+    texts = [
+        processor.apply_chat_template(msg, add_generation_prompt=True)
+        for msg in messages
     ]
-    inputs = tokenizer(messages, return_tensors="pt", padding=True)
-    inputs.update(images)
+    inputs = processor(
+        text=texts,
+        images=images,
+        return_tensors="pt",
+        padding="longest",
+        max_image_size=args.image_size,
+    )
     return inputs, batch, messages
 
 
