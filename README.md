@@ -40,7 +40,7 @@ pip install flash-attn --no-build-isolation
 
 ### Inference
 
-The total number of parameters in Aria is about 25B, it can be loaded in one A100 (80GB) GPU with bfloat16 precision.
+Aria has 25.3B total parameters, it can be loaded in one A100 (80GB) GPU with bfloat16 precision.
 
 Here is a code snippet to show you how to use Aria with Hugging Face Transformers.
 
@@ -95,23 +95,19 @@ We offer additional inference methods, such as utilizing [VLLM](https://github.c
 ### Cookbook
 Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/inference/notebooks) that demonstrate how to use Aria on various applications such as chart understanding, PDF reading, video understanding, etc.
 
-# Fine-tuning
+## Fine-tuning
 
-Aria offers the following fine-tuning methods:
-- LoRA (Low-Rank Adaptation)
-- Full parameter tuning
-
-It also supports various dataset types:
+We offer both `LoRA and` `full parameter tuning` on various dataset types:
 - Single-image datasets
 - Multi-image datasets
 - Video datasets
 
 For a quick try, visit the [examples](../examples) folder and choose one of the fine-tuning examples.
 
-## Prepare dataset
+### Prepare dataset
 Please refer to [custom_dataset.md](custom_dataset.md) for how to prepare your dataset.
 
-## Fine-tune with LoRA
+### Fine-tune with LoRA
 
 After preparing your dataset, follow these steps to fine-tune Aria using LoRA:
 
@@ -149,7 +145,7 @@ accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train
 
 See [inference with LoRA support](inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
 
-## Fine-tune with full parameter tuning
+### Fine-tune with full parameter tuning
 
 Everything is the same as the LoRA fine-tuning process, except for the configuration file `recipes/config_full.yaml`.
 
