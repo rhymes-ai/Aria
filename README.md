@@ -179,3 +179,15 @@ deepspeed_config:
   zero_stage: 3
 ```
 
+## Citation
+If you find our work helpful, please consider citing.
+```
+@article{aria,
+  title={},
+  author={},
+  year={2024},
+  journal={}
+}
+```
+
+
