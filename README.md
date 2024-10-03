@@ -2,16 +2,14 @@
 
 [😊 Hugging Face](#) | 
 [📄 Paper](#) | 
-[📰 Blog](#) | 
-[📚 Tutorial](#) | 
-[💻 Demo](#) | 
-[🌐 Website](#) | 
+[📚 Blog](#) | 
+[🌐 WebDemo](#) 
 
 
 ## Introduction
-Aria is the first open MoE model that is natively multimodal. It features SoTA performance on OCR and video understanding tasks, competitve performance on language and coding tasks, and fast inference speed with merely 3.9B activated parameters per token. 
-
-| Category                            | Benchmark               | Aria  | Pixtral 12B | Llama3 8B | Llama3-V 8B | GPT-4V | GPT-4o mini | GPT-4o | Gemini-1.5 Flash | Gemini-1.5 Pro |
+Aria is the first open multimodal native MoE model. It features state-of-the performance on a wide range of multimodal and language tasks, and fast inference speed with merely 3.9B activated parameters per token. 
+<!-- 
+| Category                            | Benchmark               | Aria  | Pixtral 12B | Llama3.2 11B | Llama3-V 8B | GPT-4V | GPT-4o mini | GPT-4o | Gemini-1.5 Flash | Gemini-1.5 Pro |
 |-------------------------------------|-------------------------|-------|-------------|-----------|-------------|--------|-------------|--------|------------------|----------------|
 | **Knowledge(Multimodal)**                  | MMMU              | 54.9  | 52.5        | -         | 49.6        | 56.4   | 59.4        | 69.1   | 56.1             | 62.2           |
 | **Math(Multimodal)**                    | MathVista   | 66.1  | 58.0        | -         | -           | -      | 54.7        | 63.8   | 58.4             | 63.9           |
@@ -24,7 +22,7 @@ Aria is the first open MoE model that is natively multimodal. It features SoTA p
 | **Math(Language)**                      | MATH              | 50.8  | 48.1        | 51.9         | -        | -      | 70.2           | 76.6   | -            | -           |
 | **Reasoning(Language)**                                    | ARC Challenge           | 91.0  | -           | 83.4         | -        | -      | 96.4           | 96.7      | -                | -              |
 | **Coding**                          | HumanEval               | 73.2  | 72.0        | 72.6      | -        | 67.0   | 87.2        | 90.2   | 74.3             | 84.1           |
-
+-->
 
 ## News
 
@@ -44,7 +42,7 @@ pip install flash-attn --no-build-isolation
 
 The total number of parameters in Aria is about 25B, it can be loaded in one A100 (80GB) GPU with bfloat16 precision.
 
-Performing inference is simple with the Hugging Face ecosystem:
+Here is a code snippet to show you how to use Aria with Hugging Face Transformers.
 
 ```python
 import requests
@@ -94,6 +92,89 @@ print(result)
 
 We offer additional inference methods, such as utilizing [VLLM](https://github.com/vllm-project/vllm) for enhanced performance. For comprehensive details, please refer to [docs/inference.md](docs/inference.md).
 
-### Fine-tuning
+### Cookbook
+Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/inference/notebooks) that demonstrate how to use Aria on various applications such as chart understanding, PDF reading, video understanding, etc.
 
-Aria supports fine-tuning through methods like LoRA (Low-Rank Adaptation) and full parameter tuning. For detailed instructions and code samples on how to fine-tune Aria, please refer to [docs/finetune.md](docs/finetune.md).
+# Fine-tuning
+
+Aria offers the following fine-tuning methods:
+- LoRA (Low-Rank Adaptation)
+- Full parameter tuning
+
+It also supports various dataset types:
+- Single-image datasets
+- Multi-image datasets
+- Video datasets
+
+For a quick try, visit the [examples](../examples) folder and choose one of the fine-tuning examples.
+
+## Prepare dataset
+Please refer to [custom_dataset.md](custom_dataset.md) for how to prepare your dataset.
+
+## Fine-tune with LoRA
+
+After preparing your dataset, follow these steps to fine-tune Aria using LoRA:
+
+1. Open the configuration file `recipes/config_lora.yaml`. Locate the `dataset_mixer` section and update it with your dataset paths:
+
+```yaml
+dataset_mixer:
+  "path/to/dataset1": 1
+  "path/to/dataset2": 0.5
+  "path/to/dataset3": 2
+```
+
+> **Note on dataset mixing:** Aria supports combining multiple datasets with different sampling rates. In the example above:
+> - `dataset1` will be used entirely (weight 1)
+> - `dataset2` will use 50% of its data (weight 0.5)
+> - `dataset3` will be used twice (weight 2)
+
+2. Start the fine-tuning process by running on one A100 (80GB) or H100 (80GB) GPU:
+
+```bash
+python aria/train.py --config recipes/config_lora.yaml
+```
+
+3. For multi-GPU training, use the [`accelerate`](https://huggingface.co/docs/accelerate/index) library:
+
+```bash
+accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train.py --config recipes/config_lora.yaml --num_processes [number_of_gpus]
+```
+
+   - Choose from pre-configured accelerate settings in `recipes/accelerate_configs/`
+   - Adjust the `--num_processes` argument to match your available GPUs
+   - For custom configurations, refer to the [accelerate documentation](https://huggingface.co/docs/accelerate/usage_guides/deepspeed)
+  
+4. Inference with the fine-tuned model:
+
+See [inference with LoRA support](inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
+
+## Fine-tune with full parameter tuning
+
+Everything is the same as the LoRA fine-tuning process, except for the configuration file `recipes/config_full.yaml`.
+
+Full parameter tuning consumes more GPU memory, thus multiple GPUs are required. It has been tested it on 8 A100 (80GB) GPUs.
+
+```bash
+accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train.py --config recipes/config_full.yaml
+```
+
+If you encounter out-of-memory errors, try reducing the `per_device_train_batch_size` in the config file. Adjust the `gradient_accumulation_steps` accordingly to maintain the effective training batch size.
+
+```yaml
+per_device_train_batch_size: 8
+gradient_accumulation_steps: 2
+```
+
+Memory consumption varies across datasets. Generally, more memory is required for multi-image and video datasets. Adjust the `deepspeed_config` parameters to optimize memory consumption, such as using `zero_stage` 3 and offloading parameters and optimizer to the CPU.
+
+```yaml
+deepspeed_config:
+  gradient_accumulation_steps: auto
+  gradient_clipping: auto
+  offload_optimizer_device: cpu
+  offload_param_device: cpu
+  zero3_init_flag: true
+  zero_stage: 3
+```
+
