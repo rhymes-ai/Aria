@@ -224,6 +224,7 @@ def main():
     )
 
     trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
+    processor.save_pretrained(training_args.output_dir)
 
     trainer.save_model(training_args.output_dir)
 
