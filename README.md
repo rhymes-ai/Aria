@@ -107,7 +107,7 @@ We offer both LoRA fine-tuning and full parameter tuning, using various dataset 
 - Multi-image datasets
 - Video datasets
 
-For a quick try, visit the [examples](../examples) folder and choose one of the fine-tuning examples.
+For a quick try, visit the [examples](./examples) folder and choose one of the fine-tuning examples.
 
 ### Prepare dataset
 Please refer to [custom_dataset.md](custom_dataset.md) for how to prepare your dataset.
