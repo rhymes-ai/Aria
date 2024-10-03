@@ -22,9 +22,8 @@ import warnings
 from typing import Dict, Iterable, List
 
 import torch
-from datasets.features import Features, Sequence, Value
-
 from datasets import DatasetDict, concatenate_datasets, load_dataset
+from datasets.features import Features, Sequence, Value
 
 
 def apply_chat_template_and_tokenize(
