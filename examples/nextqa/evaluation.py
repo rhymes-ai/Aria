@@ -69,6 +69,7 @@ def load_model_and_tokenizer(args):
     model = AriaForConditionalGeneration.from_pretrained(
         args.base_model_path, device_map="auto", torch_dtype=torch.bfloat16
     ).eval()
+    model.pad_token_id = tokenizer.pad_token_id
 
     if args.peft_model_path:
         peft_config = PeftConfig.from_pretrained(args.peft_model_path)
@@ -134,7 +135,7 @@ def collate_fn(batch, processor, tokenizer):
         padding="longest",
         max_image_size=args.image_size,
     )
-    return inputs, batch, messages
+    return inputs, batch, texts
 
 
 def main():
