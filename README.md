@@ -7,7 +7,11 @@
 
 
 ## Introduction
-Aria is the first open multimodal native MoE model. It features state-of-the performance on a wide range of multimodal and language tasks, and fast inference speed with merely 3.9B activated parameters per token. 
+Aria is a multimodal native MoE model. It features:
+- State-of-the-art performance on various multimodal and language tasks, especially in video and document understanding;
+- Long multimodal context window of 64K tokens;
+- 3.9B activated parameters per token, enabling fast inference speed and low fine-tuning cost.
+  
 <!-- 
 | Category                            | Benchmark               | Aria  | Pixtral 12B | Llama3.2 11B | Llama3-V 8B | GPT-4V | GPT-4o mini | GPT-4o | Gemini-1.5 Flash | Gemini-1.5 Pro |
 |-------------------------------------|-------------------------|-------|-------------|-----------|-------------|--------|-------------|--------|------------------|----------------|
@@ -25,6 +29,7 @@ Aria is the first open multimodal native MoE model. It features state-of-the per
 -->
 
 ## News
+- 2024.10.10: We release Aria!
 
 ## Quick Start
 
@@ -97,7 +102,7 @@ Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/
 
 ## Fine-tuning
 
-We offer both `LoRA and` `full parameter tuning` on various dataset types:
+We offer both LoRA fine-tuning and full parameter tuning, using various dataset types:
 - Single-image datasets
 - Multi-image datasets
 - Video datasets
@@ -125,7 +130,7 @@ dataset_mixer:
 > - `dataset2` will use 50% of its data (weight 0.5)
 > - `dataset3` will be used twice (weight 2)
 
-2. Start the fine-tuning process by running on one A100 (80GB) or H100 (80GB) GPU:
+2. Start the fine-tuning process by running the following command on one A100 (80GB) or H100 (80GB) GPU:
 
 ```bash
 python aria/train.py --config recipes/config_lora.yaml
@@ -145,11 +150,11 @@ accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train
 
 See [inference with LoRA support](inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
 
-### Fine-tune with full parameter tuning
+### Full parameter fine-tuning
 
 Everything is the same as the LoRA fine-tuning process, except for the configuration file `recipes/config_full.yaml`.
 
-Full parameter tuning consumes more GPU memory, thus multiple GPUs are required. It has been tested it on 8 A100 (80GB) GPUs.
+Full parameter tuning consumes more GPU memory, thus multiple GPUs are required. The following command has been tested on 8 A100 (80GB) GPUs.
 
 ```bash
 accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train.py --config recipes/config_full.yaml
