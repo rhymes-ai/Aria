@@ -18,6 +18,7 @@
 # under the License.
 
 import inspect
+import logging
 import re
 from typing import List, Optional, Union
 
@@ -33,6 +34,8 @@ from transformers.tokenization_utils import (
 )
 
 from .vision_processor import AriaVisionProcessor
+
+logger = logging.getLogger(__name__)
 
 
 class AriaProcessor(ProcessorMixin):
@@ -229,6 +232,7 @@ class AriaProcessor(ProcessorMixin):
             **cls._extract_kwargs(AriaVisionProcessor.from_pretrained, **kwargs),
         )
         if "use_fast" in kwargs:
+            logger.warning("use_fast is not supported for AriaProcessor. Ignoring...")
             kwargs.pop("use_fast")
         try:
             tokenizer = AutoTokenizer.from_pretrained(
