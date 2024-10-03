@@ -44,7 +44,6 @@ def parse_arguments():
     )
     parser.add_argument(
         "--split_image",
-        type=bool,
         help="Whether to split the image into patches",
         action="store_true",
         default=False,
@@ -124,7 +123,7 @@ def inference(
 
     for i in range(inputs["input_ids"].shape[0]):
         prompt_len = len(inputs["input_ids"][i])
-        output_text = tokenizer.decode(
+        output_text = processor.tokenizer.decode(
             output[i][prompt_len:], skip_special_tokens=True
         ).replace("<|im_end|>", "")
 
