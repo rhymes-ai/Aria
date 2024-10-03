@@ -228,9 +228,12 @@ class AriaProcessor(ProcessorMixin):
             image_processor_path,
             **cls._extract_kwargs(AriaVisionProcessor.from_pretrained, **kwargs),
         )
+        if "use_fast" in kwargs:
+            kwargs.pop("use_fast")
         try:
             tokenizer = AutoTokenizer.from_pretrained(
                 tokenizer_path,
+                use_fast=False,
                 **cls._extract_kwargs(AutoTokenizer.from_pretrained, **kwargs),
             )
             chat_template = tokenizer.chat_template
