@@ -8,7 +8,7 @@
 
 ## Introduction
 Aria is a multimodal native MoE model. It features:
-- State-of-the-art performance on various multimodal and language tasks, especially in video and document understanding;
+- State-of-the-art performance on various multimodal and language tasks, superior in video and document understanding;
 - Long multimodal context window of 64K tokens;
 - 3.9B activated parameters per token, enabling fast inference speed and low fine-tuning cost.
   
