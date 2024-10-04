@@ -148,7 +148,7 @@ accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train
   
 4. Inference with the fine-tuned model:
 
-See [inference with LoRA support](inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
+   See [inference with LoRA support](inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
 
 ### Full parameter fine-tuning
 
