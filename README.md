@@ -179,6 +179,16 @@ deepspeed_config:
   zero_stage: 3
 ```
 
+#### Inference with Your Trained Model
+
+First, you need to extract the FP32 consolidated weights from ZeRO 1, 2, or 3 DeepSpeed checkpoints:
+```bash
+cd /path/to/your/output/dir
+python zero_to_fp32.py . pytorch_model.bin
+```
+
+See [inference.md](docs/inference.md) for instructions on how to perform inference with the fine-tuned model.
+
 ## Citation
 If you find our work helpful, please consider citing.
 ```

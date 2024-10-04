@@ -30,6 +30,12 @@ accelerate launch --config_file recipes/accelerate_configs/zero3_offload.yaml ar
 ```
 
 # Evaluation and Results
+> **Note:** If you train full params with DeepSpeed ZeRO, you need to extract the fp32 consolidated weights from ZeRO 1, 2, or 3 DeepSpeed checkpoints:
+> ```bash
+> cd /path/to/your/output/dir
+> python zero_to_fp32.py . pytorch_model.bin
+> ```
+
 After modifying the dataset paths in [NextQA-Evaluation](../../examples/nextqa/evaluation.py#L45), run::
 ```bash
 CUDA_VISIBLE_DEVICES=0 python examples/nextqa/evaluation.py \
