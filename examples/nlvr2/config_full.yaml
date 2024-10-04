@@ -20,7 +20,7 @@ resume_from_checkpoint: false # resume from the latest checkpoint in output_dir 
 ## hyper params
 num_train_epochs: 1
 eval_strategy: 'no'
-learning_rate: 5e-6
+learning_rate: 5e-7
 weight_decay: 0.1
 adam_beta2: 0.95
 warmup_ratio: 0.01

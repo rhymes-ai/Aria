@@ -63,8 +63,8 @@ CUDA_VISIBLE_DEVICES=0 python examples/nlvr2/evaluation.py \
 The `Accuracy`:
 |        | Aria                           | LoRA SFT               | Full Params SFT  |
 |:--------:|:-------------------------------------:|:-------------------------:|:-------:|
-|490 |86.56 | 91.32 | 92.24 |
-|980 |87.03 | 91.61 | 92.33 |
+|490 |86.56 | 91.32 | 88.39 |
+|980 |87.03 | 91.61 | 89.44 |
 
 # Loss Curve
 These are the loss curves of `LoRA Finetuning` (left) and `Full Params Finetuning` (right) with 490 and 980 `max_image_size`:
