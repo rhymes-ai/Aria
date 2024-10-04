@@ -43,7 +43,7 @@ CUDA_VISIBLE_DEVICES=0 python examples/nextqa/evaluation.py \
 The `Accuracy`:
 | Aria                           | LoRA SFT               | Full Params SFT  |
 |:-------------------------------------:|:-------------------------:|:-------:|
-|78.14 | 80.80 | 81.42 |
+|78.14 | 80.80 | 80.08 |
 
 ## Loss Curve
 These are the loss curves of `LoRA SFT` and `Full Params SFT`:
