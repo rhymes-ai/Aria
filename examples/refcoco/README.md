@@ -70,7 +70,7 @@ CUDA_VISIBLE_DEVICES=0 python examples/refcoco/evaluation.py \
 The `Precision@1`:
 | Aria                           | LoRA SFT               | Full Params SFT  |
 |:-------------------------------------:|:-------------------------:|:-------:|
-|2.27 | 88.68 | 88.85 |
+|2.27 | 88.68 | 88.69 |
 
 # Loss Curve
 These are the loss curves of `LoRA Finetuning` (left) and `Full Params Finetuning` (right):
