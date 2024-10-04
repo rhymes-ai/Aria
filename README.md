@@ -110,7 +110,7 @@ We offer both LoRA fine-tuning and full parameter tuning, using various dataset 
 For a quick try, visit the [examples](./examples) folder and choose one of the fine-tuning examples.
 
 ### Prepare dataset
-Please refer to [custom_dataset.md](custom_dataset.md) for how to prepare your dataset.
+Please refer to [custom_dataset.md](docs/custom_dataset.md) for how to prepare your dataset.
 
 ### Fine-tune with LoRA
 
