@@ -76,7 +76,7 @@ class AriaProcessor(ProcessorMixin):
         else:
             self.tokenizer = tokenizer
 
-        if self.tokenizer.pad_token is None:
+        if self.tokenizer is not None and self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.unk_token
 
         self.image_token = image_token
@@ -241,7 +241,8 @@ class AriaProcessor(ProcessorMixin):
                 **cls._extract_kwargs(AutoTokenizer.from_pretrained, **kwargs),
             )
             chat_template = tokenizer.chat_template
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to load tokenizer from {tokenizer_path}: {e}")
             tokenizer = None
             chat_template = None
         return cls(
