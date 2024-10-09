@@ -1,6 +1,6 @@
 # Aria
 
-[😊 Hugging Face](#) | 
+[😊 Hugging Face](https://huggingface.co/rhymes-ai/Aria) | 
 [📄 Paper](#) | 
 [📚 Blog](#) | 
 [🌐 WebDemo](#) 
