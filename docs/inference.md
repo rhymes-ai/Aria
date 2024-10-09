@@ -103,11 +103,12 @@ _MULTIMODAL_MODELS["AriaForConditionalGeneration"] = (
 def main():
     llm = LLM(
         model="rhymes-ai/Aria",
+        tokenizer="rhymes-ai/Aria",
+        tokenizer_mode="slow",
         dtype="bfloat16",
         limit_mm_per_prompt={"image": 256},
         enforce_eager=True,
         trust_remote_code=True,
-        skip_tokenizer_init=True,
     )
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -143,7 +144,7 @@ def main():
                 "split_image": True,  # [Optional] whether to split the images, default `False`
             },
         },
-        sampling_params=SamplingParams(max_tokens=200, top_k=1),
+        sampling_params=SamplingParams(max_tokens=200, top_k=1, stop=["<|im_end|>"]),
     )
 
     for o in outputs:
