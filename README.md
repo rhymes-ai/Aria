@@ -95,10 +95,10 @@ with torch.inference_mode(), torch.cuda.amp.autocast(dtype=torch.bfloat16):
 print(result)
 ```
 
-We offer additional inference methods, such as utilizing [VLLM](https://github.com/vllm-project/vllm) for enhanced performance. For comprehensive details, please refer to [docs/inference.md](docs/inference.md).
+We offer additional inference methods, such as utilizing [vLLM](https://github.com/vllm-project/vllm) for enhanced performance. For comprehensive details, please refer to [docs/inference.md](docs/inference.md).
 
 ### Cookbook
-Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/inference/notebooks) that demonstrate how to use Aria on various applications such as chart understanding, PDF reading, video understanding, etc, available with both Hugging Face Transformers and [VLLM](https://github.com/vllm-project/vllm) backends.
+Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/inference/notebooks) that demonstrate how to use Aria on various applications such as chart understanding, PDF reading, video understanding, etc, available with both Hugging Face Transformers and [vLLM](https://github.com/vllm-project/vllm) backends.
 
 ## Fine-tuning
 
@@ -148,7 +148,7 @@ accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train
   
 4. Inference with the fine-tuned model:
 
-   See [inference with LoRA support](inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
+   See [inference with LoRA support](docs/inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
 
 ### Full parameter fine-tuning
 
