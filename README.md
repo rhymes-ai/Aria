@@ -12,21 +12,6 @@ Aria is a multimodal native MoE model. It features:
 - Long multimodal context window of 64K tokens;
 - 3.9B activated parameters per token, enabling fast inference speed and low fine-tuning cost.
   
-<!-- 
-| Category                            | Benchmark               | Aria  | Pixtral 12B | Llama3.2 11B | Llama3-V 8B | GPT-4V | GPT-4o mini | GPT-4o | Gemini-1.5 Flash | Gemini-1.5 Pro |
-|-------------------------------------|-------------------------|-------|-------------|-----------|-------------|--------|-------------|--------|------------------|----------------|
-| **Knowledge(Multimodal)**                  | MMMU              | 54.9  | 52.5        | -         | 49.6        | 56.4   | 59.4        | 69.1   | 56.1             | 62.2           |
-| **Math(Multimodal)**                    | MathVista   | 66.1  | 58.0        | -         | -           | -      | 54.7        | 63.8   | 58.4             | 63.9           |
-| **Document**       | DocQA            | 92.6  | 90.7           | -         | 84.4        | 88.4   | -           | 92.8  | 89.9             | 93.1           |
-| **Chart**               | ChartQA           | 86.4  | 81.8        | -         | 78.7        | 78.4   | -           | 85.7   | 85.4             | 87.2           |
-| **Scene Text**                                      | TextVQA         | 81.1  | -           | -         | 78.2        | 78.0      | -           | -      | 78.7                | 78.7              |
-| **General Visual QA**               | MMBench-1.1             | 80.3  | -           | -         | -           | 79.8   | 76.0        | 82.2   | -                | 73.9           |
-| **Video Understanding**        | LongVideoBench  | 65.3  | 47.4           | -      | -           | 60.7   | 58.8        | 66.7      | 62.4                | 64.4              |
-| **Knowledge(Language)**        | MMLU (5-shot)           | 73.3  | 69.2        | 69.4      | -        | 86.4   | -           | 89.1   | 78.9             | 85.9           |
-| **Math(Language)**                      | MATH              | 50.8  | 48.1        | 51.9         | -        | -      | 70.2           | 76.6   | -            | -           |
-| **Reasoning(Language)**                                    | ARC Challenge           | 91.0  | -           | 83.4         | -        | -      | 96.4           | 96.7      | -                | -              |
-| **Coding**                          | HumanEval               | 73.2  | 72.0        | 72.6      | -        | 67.0   | 87.2        | 90.2   | 74.3             | 84.1           |
--->
 
 ## News
 - 2024.10.10: We release Aria!
