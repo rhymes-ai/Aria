@@ -2,8 +2,8 @@
 
 [😊 Hugging Face](https://huggingface.co/rhymes-ai/Aria) | 
 [📄 Paper](https://arxiv.org/pdf/2410.05993) | 
-[📚 Blog](https://www.rhymes.ai/blog-details/aria-first-open-multimodal-native-moe-model) | 
-[🌐 WebDemo](https://www.rhymes.ai/) 
+[📚 Blog](https://rhymes.ai/blog-details/aria-first-open-multimodal-native-moe-model) | 
+[🌐 WebDemo](https://rhymes.ai/) 
 
 
 ## Introduction
