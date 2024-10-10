@@ -1,7 +1,7 @@
 # Aria
 
 [😊 Hugging Face](https://huggingface.co/rhymes-ai/Aria) | 
-[📄 Paper](#) | 
+[📄 Paper](https://arxiv.org/pdf/2410.05993) | 
 [📚 Blog](https://www.rhymes.ai/blog-details/aria-first-open-multimodal-native-moe-model) | 
 [🌐 WebDemo](https://www.rhymes.ai/) 
 
@@ -178,10 +178,10 @@ See [inference.md](docs/inference.md) for instructions on how to perform inferen
 If you find our work helpful, please consider citing.
 ```
 @article{aria,
-  title={},
-  author={},
+  title={Aria: An Open Multimodal Native Mixture-of-Experts Model}, 
+  author={Dongxu Li and Yudong Liu and Haoning Wu and Yue Wang and Zhiqi Shen and Bowen Qu and Xinyao Niu and Guoyin Wang and Bei Chen and Junnan Li},
   year={2024},
-  journal={}
+  journal={arXiv preprint arXiv:2410.05993},
 }
 ```
 
