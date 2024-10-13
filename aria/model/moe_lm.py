@@ -146,7 +146,7 @@ def switch_load_balancing_loss_func(
     topk: int,
     moe_aux_loss_coeff: float,
 ):
-    """Calculate the auxiliary loss for better load balacing.
+    """Calculate the auxiliary loss for better load balancing.
     Please refer to the Switch Transformer paper (https://arxiv.org/abs/2101.03961) for details.
 
     Args:
