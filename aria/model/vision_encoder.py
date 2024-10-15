@@ -38,7 +38,6 @@ class AriaVisionConfig(SiglipVisionConfig):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._attn_implementation = "flash_attention_2"
 
 
 class IdentityOp(torch.nn.Module):
@@ -83,6 +82,7 @@ class AriaVisionModel(SiglipVisionModel):
 
     config_class = AriaVisionConfig
     main_input_name = "pixel_values"
+    _supports_sdpa = False
 
     def __init__(self, config: AriaVisionConfig):
         super().__init__(config)
