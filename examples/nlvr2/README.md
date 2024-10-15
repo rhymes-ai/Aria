@@ -33,7 +33,7 @@ CUDA_VISIBLE_DEVICES=0 python aria/train.py --config examples/nlvr2/config_lora.
 ```
 
 ## Full Params
-Full paramater finetuning is feasible with 8 H100 GPUs, using `ZeRO3` and `Offload Parameter`. The command is as following:
+Full parameter finetuning is feasible with 8 H100 GPUs, using `ZeRO3` and `Offload Parameter`. The command is as following:
 ```bash
 accelerate launch --config_file recipes/accelerate_configs/zero3_offload.yaml aria/train.py --config examples/nlvr2/config_full.yaml --max_image_size 980 --output_dir [YOUR_OUT_DIR]
 ```
