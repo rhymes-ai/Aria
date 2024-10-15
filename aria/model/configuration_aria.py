@@ -68,6 +68,8 @@ class AriaConfig(PretrainedConfig):
         self.ignore_index = ignore_index
         self.image_token_index = image_token_index
 
+        attn_implementation = kwargs.pop("attn_implementation", None)
+
         # Convert the keys and values of projector_patch_to_query_dict to integers
         # This ensures consistency even if they were provided as strings
         self.projector_patch_to_query_dict = {
@@ -76,10 +78,20 @@ class AriaConfig(PretrainedConfig):
 
         if isinstance(vision_config, dict) and "model_type" in vision_config:
             vision_config = AriaVisionConfig(**vision_config)
+            vision_attn_implementation = (
+                "flash_attention_2"
+                if attn_implementation is None
+                else attn_implementation
+            )
+            vision_config._attn_implementation = vision_attn_implementation
 
         self.vision_config = vision_config
 
         if isinstance(text_config, dict) and "model_type" in text_config:
+            text_attn_implementation = (
+                "sdpa" if attn_implementation is None else attn_implementation
+            )
             text_config = AriaMoELMConfig(**text_config)
+            text_config._attn_implementation = text_attn_implementation
 
         self.text_config = text_config
