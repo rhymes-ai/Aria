@@ -30,6 +30,7 @@ def apply_chat_template_and_tokenize(
     messages_batch: List[List[Dict]],
     tokenizer,
     num_image_crop: Iterable[torch.Tensor] = iter([]),
+    max_length: int = 1024,
 ):
     IGNORE_TOKEN_ID = -100
     im_start_tokens = tokenizer("<|im_start|>").input_ids
@@ -87,13 +88,17 @@ def apply_chat_template_and_tokenize(
         targets.append(target)
 
     # Find the maximum length in the batch
-    max_batch_len = max(len(ids) for ids in input_ids)
+    max_batch_len = min(max(len(ids) for ids in input_ids), max_length)
 
     # Pad or truncate to max_batch_len
     for i in range(len(input_ids)):
         pad_length = max_batch_len - len(input_ids[i])
-        input_ids[i] = input_ids[i] + [tokenizer.pad_token_id] * pad_length
-        targets[i] = targets[i] + [IGNORE_TOKEN_ID] * pad_length
+        if pad_length > 0:
+            input_ids[i] = input_ids[i] + [tokenizer.pad_token_id] * pad_length
+            targets[i] = targets[i] + [IGNORE_TOKEN_ID] * pad_length
+        else: # truncate
+            input_ids[i] = input_ids[i][:max_batch_len]
+            targets[i] = targets[i][:max_batch_len]
 
     return {
         "input_ids": torch.tensor(input_ids, dtype=torch.long),
