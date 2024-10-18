@@ -1,4 +1,4 @@
-# Aria
+# Aria 📦
 
 [😊 Hugging Face](https://huggingface.co/rhymes-ai/Aria) | 
 [📄 Paper](https://arxiv.org/pdf/2410.05993) | 
@@ -6,19 +6,19 @@
 [🌐 WebDemo](https://rhymes.ai/) 
 
 
-## Introduction
+## Introduction 🚀
 Aria is a multimodal native MoE model. It features:
 - State-of-the-art performance on various multimodal and language tasks, superior in video and document understanding;
 - Long multimodal context window of 64K tokens;
 - 3.9B activated parameters per token, enabling fast inference speed and low fine-tuning cost.
   
 
-## News
+## News 📰
 - 2024.10.10: We release Aria!
 
-## Quick Start
+## Quick Start ⚙️
 
-### Installation
+### Installation 🛠️
   
 ```bash
 pip install -e .
@@ -28,7 +28,7 @@ pip install -e .[dev]
 pip install flash-attn --no-build-isolation
 ```
 
-### Inference
+### Inference 🔍
 
 Aria has 25.3B total parameters and can be loaded on one A100 (80GB) GPU with bfloat16 precision.
 
@@ -82,10 +82,10 @@ print(result)
 
 We offer additional inference methods, such as utilizing [vLLM](https://github.com/vllm-project/vllm) for enhanced performance. For comprehensive details, please refer to [docs/inference.md](docs/inference.md).
 
-### Cookbook
+### Cookbook 📚
 Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/inference/notebooks) that demonstrate how to use Aria on various applications such as chart understanding, PDF reading, video understanding, etc, available with both Hugging Face Transformers and [vLLM](https://github.com/vllm-project/vllm) backends.
 
-## Fine-tuning
+## Fine-tuning 🛠️
 
 We offer both LoRA fine-tuning and full parameter tuning, using various dataset types:
 - Single-image datasets
@@ -94,10 +94,10 @@ We offer both LoRA fine-tuning and full parameter tuning, using various dataset 
 
 For a quick try, visit the [examples](./examples) folder and choose one of the fine-tuning examples.
 
-### Prepare dataset
+### Prepare dataset 📂
 Please refer to [custom_dataset.md](docs/custom_dataset.md) for how to prepare your dataset.
 
-### Fine-tune with LoRA
+### Fine-tune with LoRA ⚙️
 
 After preparing your dataset, follow these steps to fine-tune Aria using LoRA:
 
@@ -135,7 +135,7 @@ accelerate launch --config_file recipes/accelerate_configs/zero2.yaml aria/train
 
    See [inference with LoRA support](docs/inference.md#2-inference-with-lora-support) for how to inference with the fine-tuned model.
 
-### Full parameter fine-tuning
+### Full parameter fine-tuning ⚙️
 
 Everything is the same as the LoRA fine-tuning process, except for the configuration file `recipes/config_full.yaml`.
 
@@ -164,7 +164,7 @@ deepspeed_config:
   zero_stage: 3
 ```
 
-#### Inference with Your Trained Model
+#### Inference with Your Trained Model 🧑‍💻
 
 First, you need to extract the FP32 consolidated weights from ZeRO 1, 2, or 3 DeepSpeed checkpoints:
 ```bash
@@ -174,7 +174,7 @@ python zero_to_fp32.py . pytorch_model.bin
 
 See [inference.md](docs/inference.md) for instructions on how to perform inference with the fine-tuned model.
 
-## Citation
+## Citation 📜
 If you find our work helpful, please consider citing.
 ```
 @article{aria,
