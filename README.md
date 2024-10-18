@@ -19,7 +19,7 @@ Aria is a multimodal native MoE model. It features:
 ## Quick Start
 
 ### Installation
-
+  
 ```bash
 pip install -e .
 # or install with dev dependencies if you want to contribute to the project
@@ -30,7 +30,7 @@ pip install flash-attn --no-build-isolation
 
 ### Inference
 
-Aria has 25.3B total parameters, it can be loaded in one A100 (80GB) GPU with bfloat16 precision.
+Aria has 25.3B total parameters and can be loaded on one A100 (80GB) GPU with bfloat16 precision.
 
 Here is a code snippet to show you how to use Aria with Hugging Face Transformers.
 
