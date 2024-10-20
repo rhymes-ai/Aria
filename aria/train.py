@@ -114,7 +114,13 @@ def setup_peft(model, model_config):
     return model
 
 
-def collate_fn(examples, tokenizer, processor, split_image: bool = False, max_seq_length: int = 1024):
+def collate_fn(
+    examples,
+    tokenizer,
+    processor,
+    split_image: bool = False,
+    max_seq_length: int = 1024,
+):
     images = []
     messages = []
     for example in examples:
@@ -172,7 +178,7 @@ def collate_fn(examples, tokenizer, processor, split_image: bool = False, max_se
                             message["content"].insert(cont_idx + img_i, insert_item)
             messages.append(example["messages"])
         else:
-            if example['images']:
+            if example["images"]:
                 images.extend(example["images"])
             messages.append(example["messages"])
 
@@ -192,7 +198,7 @@ def collate_fn(examples, tokenizer, processor, split_image: bool = False, max_se
 
         batch.update(image_inputs)
         batch["pixel_values"] = batch["pixel_values"].to(torch.bfloat16)
-    else: # text-only
+    else:  # text-only
         batch = apply_chat_template_and_tokenize(
             messages,
             tokenizer,
@@ -225,7 +231,11 @@ def main():
         model=model,
         args=training_args,
         data_collator=lambda examples: collate_fn(
-            examples, tokenizer, processor, model_config.split_image, training_args.max_seq_length
+            examples,
+            tokenizer,
+            processor,
+            model_config.split_image,
+            training_args.max_seq_length,
         ),
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,

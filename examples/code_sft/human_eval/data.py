@@ -1,8 +1,7 @@
-from typing import Iterable, Dict
 import gzip
 import json
 import os
-
+from typing import Dict, Iterable
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 HUMAN_EVAL = os.path.join(ROOT, "..", "data", "HumanEval.jsonl.gz")
@@ -18,7 +17,7 @@ def stream_jsonl(filename: str) -> Iterable[Dict]:
     """
     if filename.endswith(".gz"):
         with open(filename, "rb") as gzfp:
-            with gzip.open(gzfp, 'rt') as fp:
+            with gzip.open(gzfp, "rt") as fp:
                 for line in fp:
                     if any(not x.isspace() for x in line):
                         yield json.loads(line)
@@ -34,16 +33,16 @@ def write_jsonl(filename: str, data: Iterable[Dict], append: bool = False):
     Writes an iterable of dictionaries to jsonl
     """
     if append:
-        mode = 'ab'
+        mode = "ab"
     else:
-        mode = 'wb'
+        mode = "wb"
     filename = os.path.expanduser(filename)
     if filename.endswith(".gz"):
         with open(filename, mode) as fp:
-            with gzip.GzipFile(fileobj=fp, mode='wb') as gzfp:
+            with gzip.GzipFile(fileobj=fp, mode="wb") as gzfp:
                 for x in data:
-                    gzfp.write((json.dumps(x) + "\n").encode('utf-8'))
+                    gzfp.write((json.dumps(x) + "\n").encode("utf-8"))
     else:
         with open(filename, mode) as fp:
             for x in data:
-                fp.write((json.dumps(x) + "\n").encode('utf-8'))
+                fp.write((json.dumps(x) + "\n").encode("utf-8"))

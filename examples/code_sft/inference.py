@@ -1,16 +1,16 @@
 import argparse
-import re
-import os
 import json
-from tqdm import trange
+import os
+import re
 
 import torch
 from peft import PeftConfig, PeftModel
+from tqdm import trange
 
 from aria.lora.layers import GroupedGemmLoraLayer
 from aria.model import AriaForConditionalGeneration, AriaProcessor, GroupedGEMM
-
 from datasets import load_dataset
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Aria Inference Script on HumanEval")
@@ -21,6 +21,7 @@ def parse_arguments():
     parser.add_argument("--tokenizer_path", required=True, help="Path to the tokenizer")
     parser.add_argument("--save_root", required=True, help="Path to the save_dir")
     return parser.parse_args()
+
 
 def load_model(base_model_path, peft_model_path=None):
     model = AriaForConditionalGeneration.from_pretrained(
@@ -40,6 +41,7 @@ def load_model(base_model_path, peft_model_path=None):
         )
 
     return model
+
 
 def prepare_input(prompt, processor: AriaProcessor):
 
@@ -61,11 +63,18 @@ def prepare_input(prompt, processor: AriaProcessor):
 
     return inputs
 
+
 def build_aria_instruction(question: str):
-    return '''
+    return (
+        """
 Please complete the python function below. The final complete version of your function must be returned within a code block. Here is the unfinished function:\n ```python\n
 {}
-'''.strip().format(question.strip()) + "\n\n"
+""".strip().format(
+            question.strip()
+        )
+        + "\n\n"
+    )
+
 
 def inference(
     question,
@@ -93,17 +102,19 @@ def inference(
 
     return output_text
 
+
 def extract_markdown_content(text):
-    pattern = r'```python(.*?)```'
+    pattern = r"```python(.*?)```"
     matches = re.findall(pattern, text, re.DOTALL)
     return matches
 
+
 def generate_problem_file(data, fp):
     ld = len(data)
-    with open(fp, "w", encoding='utf-8') as f:
+    with open(fp, "w", encoding="utf-8") as f:
         for idx in trange(ld):
             item = data[idx]
-            item['test'] += f"check({item['entry_point']})\n"
+            item["test"] += f"check({item['entry_point']})\n"
             f.write(f"{json.dumps(item)}\n")
 
 
@@ -111,8 +122,10 @@ def main():
     args = parse_arguments()
     os.makedirs(args.save_root, exist_ok=True)
 
-    humaneval_data = load_dataset("openai/openai_humaneval")['test']
-    generate_problem_file(humaneval_data, os.path.join(args.save_root, "problem_file.jsonl"))
+    humaneval_data = load_dataset("openai/openai_humaneval")["test"]
+    generate_problem_file(
+        humaneval_data, os.path.join(args.save_root, "problem_file.jsonl")
+    )
 
     # if the tokenizer is not put in the same folder as the model, we need to specify the tokenizer path
     processor = AriaProcessor.from_pretrained(
@@ -125,10 +138,8 @@ def main():
     with open(os.path.join(args.save_root, "human_eval_predictions.jsonl"), "w") as fo:
         for idx in trange(l_test):
             item = humaneval_data[idx]
-            item['test'] += f"check({item['entry_point']})\n"
-            out_item = {
-                **item
-            }
+            item["test"] += f"check({item['entry_point']})\n"
+            out_item = {**item}
 
             result = inference(
                 item["prompt"],
@@ -137,10 +148,10 @@ def main():
             )
             extraced_result = extract_markdown_content(result)
             if extraced_result:
-                out_item['generation'] = extraced_result[0]
+                out_item["generation"] = extraced_result[0]
             else:
-                out_item['generation'] = result
-            
+                out_item["generation"] = result
+
             fo.write(f"{json.dumps(out_item)}\n")
 
 

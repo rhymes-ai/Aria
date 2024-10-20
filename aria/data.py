@@ -22,8 +22,9 @@ import warnings
 from typing import Dict, Iterable, List
 
 import torch
-from datasets import DatasetDict, concatenate_datasets, load_dataset
 from datasets.features import Features, Sequence, Value
+
+from datasets import DatasetDict, concatenate_datasets, load_dataset
 
 
 def apply_chat_template_and_tokenize(
@@ -96,7 +97,7 @@ def apply_chat_template_and_tokenize(
         if pad_length > 0:
             input_ids[i] = input_ids[i] + [tokenizer.pad_token_id] * pad_length
             targets[i] = targets[i] + [IGNORE_TOKEN_ID] * pad_length
-        else: # truncate
+        else:  # truncate
             input_ids[i] = input_ids[i][:max_batch_len]
             targets[i] = targets[i][:max_batch_len]
 

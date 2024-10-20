@@ -1,11 +1,12 @@
-from human_eval.evaluation import evaluate_functional_correctness
-import json
 import argparse
-
 import os
 
+from human_eval.evaluation import evaluate_functional_correctness
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--save_root", required=True, type=str, help="the result directory of humaneval")
+parser.add_argument(
+    "--save_root", required=True, type=str, help="the result directory of humaneval"
+)
 args = parser.parse_args()
 
 tmp_dir = os.path.join(args.save_root, "tmp")

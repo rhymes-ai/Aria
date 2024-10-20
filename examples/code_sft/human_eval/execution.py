@@ -4,14 +4,11 @@ import io
 import multiprocessing
 import os
 import platform
-import signal
 import random
+import signal
 import subprocess
 import tempfile
-import gzip
-import json
 from typing import *
-import traceback
 
 java_exec = ""
 node_exec = ""
@@ -20,13 +17,14 @@ go_exec = ""
 php_exec = ""
 cs_exec = ""
 
+
 def check_correctness(
-        task_id: str,
-        sample: dict,
-        language_type: str,
-        timeout: float = 3.0,
-        tmp_dir: str = None,
-        completion_id: Optional[int] = None,
+    task_id: str,
+    sample: dict,
+    language_type: str,
+    timeout: float = 3.0,
+    tmp_dir: str = None,
+    completion_id: Optional[int] = None,
 ) -> Dict:
     """
     Evaluates the functional correctness of a completion by running the test
@@ -41,6 +39,7 @@ def check_correctness(
                 # These system calls are needed when cleaning up tempdir.
                 import os
                 import shutil
+
                 rmtree = shutil.rmtree
                 rmdir = os.rmdir
                 chdir = os.chdir
@@ -65,19 +64,21 @@ def check_correctness(
                         result.append("passed")
                 except TimeoutException:
                     result.append("timed out")
-                except AssertionError as e:
+                except AssertionError:
                     result.append(f"failed: AssertionError")
                 except BaseException as e:
                     result.append(f"failed: {e}")
-                #print(sample["test_code"])
-                #print(result)
+                # print(sample["test_code"])
+                # print(result)
                 # Needed for cleaning up.
                 shutil.rmtree = rmtree
                 os.rmdir = rmdir
                 os.chdir = chdir
 
         elif "go" in language_type.lower():
-            assert tmp_dir is not None, "Go should be evaluated in a dir where necessary module files installed."
+            assert (
+                tmp_dir is not None
+            ), "Go should be evaluated in a dir where necessary module files installed."
 
             import os
             import shutil
@@ -89,7 +90,7 @@ def check_correctness(
                 os.makedirs(tmp_dir)
             origin_path = os.getcwd()
             os.chdir(tmp_dir)
-            open(f"main_test.go", 'w').write(sample["test_code"])
+            open(f"main_test.go", "w").write(sample["test_code"])
             try:
                 exec_result = None
                 with time_limit(timeout):
@@ -102,7 +103,16 @@ def check_correctness(
                     # does not perform destructive actions on their host or network.
                     # Once you have read this disclaimer and taken appropriate precautions,
                     # uncomment the following line and proceed at your own risk:
-                     exec_result = subprocess.run([f"{go_exec}go", "test", f"-timeout={timeout}s", "main_test.go"], timeout=timeout, capture_output=True)
+                    exec_result = subprocess.run(
+                        [
+                            f"{go_exec}go",
+                            "test",
+                            f"-timeout={timeout}s",
+                            "main_test.go",
+                        ],
+                        timeout=timeout,
+                        capture_output=True,
+                    )
 
                 if exec_result.returncode == 0:
                     result.append("passed")
@@ -134,7 +144,7 @@ def check_correctness(
                 os.makedirs(tmp_dir)
             origin_path = os.getcwd()
             os.chdir(tmp_dir)
-            open(f"test.js", 'w').write(sample["test_code"])
+            open(f"test.js", "w").write(sample["test_code"])
             try:
                 exec_result = None
                 with time_limit(timeout):
@@ -147,7 +157,11 @@ def check_correctness(
                     # does not perform destructive actions on their host or network.
                     # Once you have read this disclaimer and taken appropriate precautions,
                     # uncomment the following line and proceed at your own risk:
-                     exec_result = subprocess.run([f"{node_exec}node", "test.js"], timeout=timeout, capture_output=True)
+                    exec_result = subprocess.run(
+                        [f"{node_exec}node", "test.js"],
+                        timeout=timeout,
+                        capture_output=True,
+                    )
 
                 if exec_result.stderr.decode():
                     err = exec_result.stderr.decode()
@@ -165,6 +179,7 @@ def check_correctness(
         elif "cpp" in language_type.lower():
             import os
             import shutil
+
             origin_path = os.getcwd()
             if "tmp" not in tmp_dir:
                 tmp_dir = os.path.join(tmp_dir, "tmp")
@@ -173,14 +188,19 @@ def check_correctness(
                 os.makedirs(tmp_dir)
 
             os.chdir(tmp_dir)
-            open(f"test.cpp", 'w').write(sample["test_code"])
+            open(f"test.cpp", "w").write(sample["test_code"])
             if "162" in task_id:
-                compilation_result = subprocess.run(["/usr/bin/g++", "-std=c++17", "test.cpp", "-lcrypto", "-lssl"],
-                                                    timeout=timeout,
-                                                    capture_output=True)
+                compilation_result = subprocess.run(
+                    ["/usr/bin/g++", "-std=c++17", "test.cpp", "-lcrypto", "-lssl"],
+                    timeout=timeout,
+                    capture_output=True,
+                )
             else:
-                compilation_result = subprocess.run(["/usr/bin/g++", "-std=c++17", "test.cpp"], timeout=timeout,
-                                                    capture_output=True)
+                compilation_result = subprocess.run(
+                    ["/usr/bin/g++", "-std=c++17", "test.cpp"],
+                    timeout=timeout,
+                    capture_output=True,
+                )
             if compilation_result.returncode != 0:
                 if compilation_result.stderr:
                     err = compilation_result.stderr.decode()
@@ -200,7 +220,9 @@ def check_correctness(
                         # does not perform destructive actions on their host or network.
                         # Once you have read this disclaimer and taken appropriate precautions,
                         # uncomment the following line and proceed at your own risk:
-                         exec_result = subprocess.run(["./a.out"], timeout=timeout, capture_output=True)
+                        exec_result = subprocess.run(
+                            ["./a.out"], timeout=timeout, capture_output=True
+                        )
 
                     if exec_result.returncode == 0:
                         result.append("passed")
@@ -218,13 +240,14 @@ def check_correctness(
                         result.append(f"failed: {err}")
                 except TimeoutException:
                     result.append("timed out")
-            #print(result[-1])
-            #print(sample["test_code"])
+            # print(result[-1])
+            # print(sample["test_code"])
             os.chdir(origin_path)
             shutil.rmtree(tmp_dir)
         elif "php" in language_type.lower():
             import os
             import shutil
+
             origin_path = os.getcwd()
             if "tmp" not in tmp_dir:
                 tmp_dir = os.path.join(tmp_dir, "tmp")
@@ -233,12 +256,14 @@ def check_correctness(
                 os.makedirs(tmp_dir)
 
             os.chdir(tmp_dir)
-            open(f"test.php", 'w').write(sample["test_code"])
+            open(f"test.php", "w").write(sample["test_code"])
             try:
                 exec_result = None
                 with time_limit(timeout):
                     cmd = f"{php_exec}php -f test.php"
-                    exec_result = subprocess.run(cmd, timeout=timeout, capture_output=True, shell=True)
+                    exec_result = subprocess.run(
+                        cmd, timeout=timeout, capture_output=True, shell=True
+                    )
 
                 if exec_result.returncode == 0:
                     result.append("passed")
@@ -263,6 +288,7 @@ def check_correctness(
         elif "sh" in language_type.lower():
             import os
             import shutil
+
             origin_path = os.getcwd()
             if "tmp" not in tmp_dir:
                 tmp_dir = os.path.join(tmp_dir, "tmp")
@@ -271,12 +297,14 @@ def check_correctness(
                 os.makedirs(tmp_dir)
 
             os.chdir(tmp_dir)
-            open(f"test.sh", 'w').write(sample["test_code"])
+            open(f"test.sh", "w").write(sample["test_code"])
             try:
                 exec_result = None
                 with time_limit(timeout):
                     cmd = "/bin/bash test.sh"
-                    exec_result = subprocess.run(cmd, timeout=10, capture_output=True, shell=True)
+                    exec_result = subprocess.run(
+                        cmd, timeout=10, capture_output=True, shell=True
+                    )
 
                 if exec_result.returncode == 0:
                     result.append("passed")
@@ -294,13 +322,14 @@ def check_correctness(
                     result.append(f"failed: {err}")
             except TimeoutException:
                 result.append("timed out")
-            #print(result[-1])
-            #print(sample["test_code"])
+            # print(result[-1])
+            # print(sample["test_code"])
             os.chdir(origin_path)
             shutil.rmtree(tmp_dir)
         elif "ts" in language_type.lower():
             import os
             import shutil
+
             origin_path = os.getcwd()
             if "tmp" not in tmp_dir:
                 tmp_dir = os.path.join(tmp_dir, "tmp")
@@ -310,9 +339,11 @@ def check_correctness(
 
             os.chdir(tmp_dir)
             env = {"PATH": f"{node_exec}:" + subprocess.os.environ["PATH"]}
-            open(f"test.ts", 'w').write(sample["test_code"])
+            open(f"test.ts", "w").write(sample["test_code"])
             cmd = f"{tsc_exec}tsc test.ts --target ES2015 --lib ES2015,DOM"
-            compilation_result = subprocess.run(cmd, timeout=timeout, capture_output=True, env=env, shell=True)
+            compilation_result = subprocess.run(
+                cmd, timeout=timeout, capture_output=True, env=env, shell=True
+            )
             if compilation_result.returncode != 0:
                 if compilation_result.stderr:
                     err = compilation_result.stderr.decode()
@@ -323,7 +354,11 @@ def check_correctness(
                 try:
                     exec_result = None
                     with time_limit(timeout):
-                         exec_result = subprocess.run([f"{node_exec}node", "test.js"], timeout=timeout, capture_output=True)
+                        exec_result = subprocess.run(
+                            [f"{node_exec}node", "test.js"],
+                            timeout=timeout,
+                            capture_output=True,
+                        )
 
                     if exec_result.returncode == 0:
                         result.append("passed")
@@ -344,7 +379,9 @@ def check_correctness(
             if result[-1] != "passed":
                 env = {"PATH": f"{node_exec}:" + subprocess.os.environ["PATH"]}
                 cmd = f"{tsc_exec}tsc test.ts"
-                compilation_result = subprocess.run(cmd, timeout=timeout, capture_output=True, env=env, shell=True)
+                compilation_result = subprocess.run(
+                    cmd, timeout=timeout, capture_output=True, env=env, shell=True
+                )
                 if compilation_result.returncode != 0:
                     if compilation_result.stderr:
                         err = compilation_result.stderr.decode()
@@ -355,7 +392,11 @@ def check_correctness(
                     try:
                         exec_result = None
                         with time_limit(timeout):
-                            exec_result = subprocess.run([f"{node_exec}node", "test.js"], timeout=timeout, capture_output=True)
+                            exec_result = subprocess.run(
+                                [f"{node_exec}node", "test.js"],
+                                timeout=timeout,
+                                capture_output=True,
+                            )
 
                         if exec_result.returncode == 0:
                             result[-1] = "passed"
@@ -373,12 +414,13 @@ def check_correctness(
                             result[-1] = f"failed: {err}"
                     except TimeoutException:
                         result[-1] = "timed out"
- 
+
             os.chdir(origin_path)
             shutil.rmtree(tmp_dir)
         elif "cs" in language_type.lower():
             import os
             import shutil
+
             origin_path = os.getcwd()
             if "tmp" not in tmp_dir:
                 tmp_dir = os.path.join(tmp_dir, "tmp")
@@ -386,7 +428,7 @@ def check_correctness(
             if not os.path.exists(tmp_dir):
                 os.makedirs(tmp_dir)
             os.chdir(tmp_dir)
-            open(f"Program.cs", 'w').write(sample["test_code"])
+            open(f"Program.cs", "w").write(sample["test_code"])
             cmd = f"{cs_exec}mcs -d:DEBUG Program.cs"
             compilation_result = subprocess.run(cmd, shell=True, capture_output=True)
             if compilation_result.returncode != 0:
@@ -401,7 +443,13 @@ def check_correctness(
                     cmd = f"{cs_exec}mono Program.exe"
                     env = dict(MONO_TRACE_LISTENER="Console.Error")
                     with time_limit(timeout):
-                         exec_result = subprocess.run(cmd, timeout=timeout, shell=True, capture_output=True, env=env)
+                        exec_result = subprocess.run(
+                            cmd,
+                            timeout=timeout,
+                            shell=True,
+                            capture_output=True,
+                            env=env,
+                        )
 
                     if "Fail" not in exec_result.stderr.decode():
                         result.append("passed")
@@ -423,16 +471,16 @@ def check_correctness(
                     result.append(f"failed: {e}")
             os.chdir(origin_path)
             shutil.rmtree(tmp_dir)
-        elif "rust" in language_type.lower():  
-            import os         
-            
+        elif "rust" in language_type.lower():
+            import os
+
             WD: str = os.path.dirname(os.path.abspath(__file__))
             RUST_DIR: str = os.path.join(WD, "rust")
             RUST_SRC: str = os.path.join(RUST_DIR, "src")
             RUST_BIN: str = os.path.join(RUST_SRC, "bin")
             RUST_TMP_DIR: str = os.path.join(RUST_DIR, "tmp")
             RUST_LOGS: str = os.path.join(RUST_TMP_DIR, "logs")
-            RUST_EXT: str = ".rs" 
+            RUST_EXT: str = ".rs"
 
             # Create mandatory tmp directories
             os.makedirs(RUST_TMP_DIR, exist_ok=True)
@@ -440,18 +488,18 @@ def check_correctness(
             os.makedirs(RUST_SRC, exist_ok=True)
             os.makedirs(RUST_BIN, exist_ok=True)
 
-            with tempfile.NamedTemporaryFile(dir = RUST_BIN, delete=False) as f:
-                #temporal file name
+            with tempfile.NamedTemporaryFile(dir=RUST_BIN, delete=False) as f:
+                # temporal file name
                 file_prefix = sample["task_id"].lower().replace("/", "_")
-                file_name:str =  file_prefix +RUST_EXT
-                
+                file_name: str = file_prefix + RUST_EXT
+
                 os.rename(f.name, os.path.join(RUST_BIN, file_name))
-                
+
                 # Sample to pure Rust function
                 rust_code: str = sample["test_code"]
 
                 # dump the rust source code in the target temporal file
-                f.write(rust_code.encode('utf-8'))
+                f.write(rust_code.encode("utf-8"))
 
             # Proceed towards Rust binaries compilation. Therefore move to Rust module root dir.
             os.chdir(RUST_DIR)
@@ -460,34 +508,43 @@ def check_correctness(
             # Pass OR Fail compilation
             log_filename: str = file_prefix + ".jsonl"
             log_path: str = os.path.join(RUST_LOGS, log_filename)
-            cargo_check: str = "cargo check --bin " + file_prefix + " --message-format json >> " + log_path
+            cargo_check: str = (
+                "cargo check --bin "
+                + file_prefix
+                + " --message-format json >> "
+                + log_path
+            )
             # Compilation build status
             returned_val_compilation: int
-            
+
             # Overwrite file content
             if os.path.exists(log_path):
-                if(file_size := os.path.getsize(log_path)) >= 0: 
+                if (file_size := os.path.getsize(log_path)) >= 0:
                     os.remove(log_path)
                     returned_val_compilation = os.system(cargo_check)
 
-            else: 
+            else:
                 returned_val_compilation = os.system(cargo_check)
 
-            # 0 means success   
+            # 0 means success
             if returned_val_compilation == 0:
 
-                #Execution pipeline
-                cargo_test: str = "cargo test --bin " +file_prefix+ " --message-format json >> " + log_path
+                # Execution pipeline
+                cargo_test: str = (
+                    "cargo test --bin "
+                    + file_prefix
+                    + " --message-format json >> "
+                    + log_path
+                )
                 returned_val_execution = os.system(cargo_test)
-                
+
                 if returned_val_execution == 0:
                     result.append("passed")
                 else:
-                   result.append(f"failed: execution error") 
+                    result.append(f"failed: execution error")
 
             else:
                 result.append(f"failed: compilation error")
-
 
         elif "java" in language_type.lower():
             assert tmp_dir is not None, "Java should be evaluated in a temporary dir."
@@ -500,7 +557,7 @@ def check_correctness(
             tmp_dir = os.path.join(tmp_dir, f"{task_id.replace('/', '-')}-{random_id}")
             if not os.path.exists(tmp_dir):
                 os.makedirs(tmp_dir)
-            open(os.path.join(tmp_dir, "Problem.java"), 'w').write(sample["test_code"])
+            open(os.path.join(tmp_dir, "Problem.java"), "w").write(sample["test_code"])
             origin_path = os.getcwd()
             os.system(f"cp ./javatuples-1.2.jar {tmp_dir}/")
             os.chdir(tmp_dir)
@@ -509,7 +566,9 @@ def check_correctness(
             for _ in range(5):
                 try:
                     cmd = f"{java_exec}javac -cp javatuples-1.2.jar Problem.java"
-                    compilation_result = subprocess.run(cmd, timeout=60, capture_output=True, shell=True)  
+                    compilation_result = subprocess.run(
+                        cmd, timeout=60, capture_output=True, shell=True
+                    )
                     compile_returncode = compilation_result.returncode
                     break
                 except subprocess.TimeoutExpired as e:
@@ -529,11 +588,15 @@ def check_correctness(
                     # Once you have read this disclaimer and taken appropriate precautions,
                     # uncomment the following line and proceed at your own risk:
                     cmd = f"{java_exec}java -ea -cp .:javatuples-1.2.jar Problem"
-                    exec_result = subprocess.run(cmd, timeout=timeout, capture_output=True, shell=True)  
+                    exec_result = subprocess.run(
+                        cmd, timeout=timeout, capture_output=True, shell=True
+                    )
                     if exec_result.returncode == 0:
                         res = "passed"
                     elif exec_result.returncode == 1:
-                        if "AssertionError" in exec_result.stderr.decode('unicode-escape'):
+                        if "AssertionError" in exec_result.stderr.decode(
+                            "unicode-escape"
+                        ):
                             res = "failed: wrong answer"
                         else:
                             res = f"failed: {exec_result.stderr.decode()}"
@@ -542,10 +605,10 @@ def check_correctness(
                 except BaseException as e:
                     res = f"failed: {e}"
 
-            result.append(res)  
-            os.chdir(origin_path)          
+            result.append(res)
+            os.chdir(origin_path)
             shutil.rmtree(tmp_dir)
-        
+
     manager = multiprocessing.Manager()
     result = manager.list()
 
@@ -559,13 +622,14 @@ def check_correctness(
         result.append("timed out")
 
     return {
-        "task_id"      : task_id,
+        "task_id": task_id,
         "completion_id": completion_id,
-        "result"       : result[0],
-        "passed"       : result[0] == "passed",
-        "finish"       : -1 if "finish" not in sample else sample["finish"],
-        "code"         : sample["test_code"]
+        "result": result[0],
+        "passed": result[0] == "passed",
+        "finish": -1 if "finish" not in sample else sample["finish"],
+        "code": sample["test_code"],
     }
+
 
 # Copyright (c) OpenAI (https://openai.com)
 
@@ -578,6 +642,7 @@ def check_correctness(
 
 # The above copyright notice and this permission notice shall be included in
 # all copies or substantial portions of the Software.
+
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -621,7 +686,7 @@ class TimeoutException(Exception):
 
 
 class WriteOnlyStringIO(io.StringIO):
-    """ StringIO that throws an exception when it's read from """
+    """StringIO that throws an exception when it's read from"""
 
     def read(self, *args, **kwargs):
         raise IOError
@@ -633,12 +698,12 @@ class WriteOnlyStringIO(io.StringIO):
         raise IOError
 
     def readable(self, *args, **kwargs):
-        """ Returns True if the IO object can be read. """
+        """Returns True if the IO object can be read."""
         return False
 
 
 class redirect_stdin(contextlib._RedirectStream):  # type: ignore
-    _stream = 'stdin'
+    _stream = "stdin"
 
 
 @contextlib.contextmanager
@@ -664,26 +729,35 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
 
     WARNING
     This function is NOT a security sandbox. Untrusted code, including, model-
-    generated code, should not be blindly executed outside of one. See the 
+    generated code, should not be blindly executed outside of one. See the
     Codex paper for more information about OpenAI's code sandbox, and proceed
     with caution.
     """
 
     if maximum_memory_bytes is not None:
         import resource
-        resource.setrlimit(resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes))
-        resource.setrlimit(resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes))
-        if not platform.uname().system == 'Darwin':
-            resource.setrlimit(resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes))
+
+        resource.setrlimit(
+            resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes)
+        )
+        resource.setrlimit(
+            resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes)
+        )
+        if not platform.uname().system == "Darwin":
+            resource.setrlimit(
+                resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes)
+            )
 
     faulthandler.disable()
 
     import builtins
+
     builtins.exit = None
     builtins.quit = None
 
     import os
-    os.environ['OMP_NUM_THREADS'] = '1'
+
+    os.environ["OMP_NUM_THREADS"] = "1"
 
     os.kill = None
     os.system = None
@@ -714,18 +788,21 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
     os.chdir = None
 
     import shutil
+
     shutil.rmtree = None
     shutil.move = None
     shutil.chown = None
 
     import subprocess
+
     subprocess.Popen = None  # type: ignore
 
-    __builtins__['help'] = None
+    __builtins__["help"] = None
 
     import sys
-    sys.modules['ipdb'] = None
-    sys.modules['joblib'] = None
-    sys.modules['resource'] = None
-    sys.modules['psutil'] = None
-    sys.modules['tkinter'] = None
+
+    sys.modules["ipdb"] = None
+    sys.modules["joblib"] = None
+    sys.modules["resource"] = None
+    sys.modules["psutil"] = None
+    sys.modules["tkinter"] = None
