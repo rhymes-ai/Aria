@@ -114,7 +114,13 @@ def setup_peft(model, model_config):
     return model
 
 
-def collate_fn(examples, tokenizer, processor, split_image: bool = False):
+def collate_fn(
+    examples,
+    tokenizer,
+    processor,
+    split_image: bool = False,
+    max_seq_length: int = 1024,
+):
     images = []
     messages = []
     for example in examples:
@@ -172,23 +178,32 @@ def collate_fn(examples, tokenizer, processor, split_image: bool = False):
                             message["content"].insert(cont_idx + img_i, insert_item)
             messages.append(example["messages"])
         else:
-            images.extend(example["images"])
+            if example["images"]:
+                images.extend(example["images"])
             messages.append(example["messages"])
-    images = [
-        Image.open(image).convert("RGB") if isinstance(image, str) else image
-        for image in images
-    ]
-    image_inputs = processor(images, split_image=split_image)
 
-    batch = apply_chat_template_and_tokenize(
-        messages,
-        tokenizer,
-        iter(image_inputs.pop("num_crops")),
-    )
+    if images:
+        images = [
+            Image.open(image).convert("RGB") if isinstance(image, str) else image
+            for image in images
+        ]
+        image_inputs = processor(images, split_image=split_image)
 
-    batch.update(image_inputs)
+        batch = apply_chat_template_and_tokenize(
+            messages,
+            tokenizer,
+            iter(image_inputs.pop("num_crops")),
+            max_length=max_seq_length,
+        )
 
-    batch["pixel_values"] = batch["pixel_values"].to(torch.bfloat16)
+        batch.update(image_inputs)
+        batch["pixel_values"] = batch["pixel_values"].to(torch.bfloat16)
+    else:  # text-only
+        batch = apply_chat_template_and_tokenize(
+            messages,
+            tokenizer,
+            max_length=max_seq_length,
+        )
 
     return batch
 
@@ -216,7 +231,11 @@ def main():
         model=model,
         args=training_args,
         data_collator=lambda examples: collate_fn(
-            examples, tokenizer, processor, model_config.split_image
+            examples,
+            tokenizer,
+            processor,
+            model_config.split_image,
+            training_args.max_seq_length,
         ),
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,

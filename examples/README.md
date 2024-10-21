@@ -15,3 +15,5 @@ NLVR2 (Natural Language for Visual Reasoning) is a task where given two images, 
 We use the [NextQA dataset](https://arxiv.org/abs/2105.08276) as an example.
 NextQA requires the model to select an answer from several options according to the video input and question. The model is expected to output the correct option's character. Please refer to [NextQA_Example](./nextqa/README.md) for details!
 
+# Fine-tune on code dataset
+We use the [Magicoder-Evol-Instruct-110k dataset](https://arxiv.org/abs/2312.02120) as an example to further finetune Aria for generating high-quality code. Please refer to [Code-SFT_Example](./code_sft/README.md) for details!
