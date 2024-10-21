@@ -1,9 +1,8 @@
 import json
 import os
 
-from tqdm import trange
-
 from datasets import load_dataset
+from tqdm import trange
 
 save_dir = "./datasets/code_sft"
 os.makedirs(save_dir, exist_ok=True)
