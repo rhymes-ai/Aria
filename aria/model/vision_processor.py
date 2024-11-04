@@ -45,7 +45,7 @@ def _select_best_resolution(
     aspect_ratio = img_width / img_height
     best_ratio_diff = float("inf")
     best_ratio_w, best_ratio_h = 1, 1
-    area = np.int32(img_height) * np.int32(img_height)
+    area = np.int32(img_width) * np.int32(img_height)
     for ratio in target_ratios:
         target_aspect_ratio = ratio[0] / ratio[1]
         ratio_diff = abs(aspect_ratio - target_aspect_ratio)
