@@ -9,9 +9,9 @@ Then please unzip the `.zip` files(including images and videos) inside each sub-
 cd ./datasets/nlvr2/images
 unzip dev.zip
 cd train
-unzip train.part1.zip
-unzip train.part2.zip
-unzip train.part3.zip
+unzip train_part1.zip
+unzip train_part2.zip
+unzip train_part3.zip
 ```
 
 
