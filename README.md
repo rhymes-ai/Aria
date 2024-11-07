@@ -1,10 +1,10 @@
 # Aria
 
-[😊 Hugging Face](https://huggingface.co/rhymes-ai/Aria) | 
-[📄 Paper](https://arxiv.org/pdf/2410.05993) | 
-[📚 Blog](https://rhymes.ai/blog-details/aria-first-open-multimodal-native-moe-model) | 
-[🌐 WebDemo](https://rhymes.ai/) 
-
+😊 [Hugging Face](https://huggingface.co/rhymes-ai/Aria) | 
+📄 [Paper](https://arxiv.org/pdf/2410.05993) | 
+📚 [Blog](https://rhymes.ai/blog-details/aria-first-open-multimodal-native-moe-model) | 
+🌐 [WebDemo](https://rhymes.ai/)  | 
+🟣 [Discord](https://discord.com/invite/u8HxU23myj)
 
 ## Introduction
 Aria is a multimodal native MoE model. It features:
