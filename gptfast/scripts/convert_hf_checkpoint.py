@@ -13,7 +13,30 @@ from typing import Optional
 
 import torch
 from safetensors.torch import load_file as load_safetensors_file
-from model import ModelArgs
+from dataclasses import dataclass
+
+@dataclass
+class ModelArgs:
+    block_size: int = 16384
+    vocab_size: int = 100352
+    n_layer: int = 28
+    n_head: int = 20
+    dim: int = 2560
+    intermediate_size: int = 1664
+    n_local_heads: int = -1
+    head_dim: int = 64
+    rope_base: float = 10000
+    norm_eps: float = 1e-5
+    use_scaled_rope: bool = False
+    num_experts: int = 64
+    router_topk: int = 6
+    num_shared_experts: int = 2
+    image_token_index: int = 9
+
+    def __post_init__(self):
+        if self.n_local_heads == -1:
+            self.n_local_heads = self.n_head
+        self.head_dim = self.dim // self.n_head
 
 
 @torch.inference_mode()
