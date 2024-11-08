@@ -10,3 +10,4 @@ aria.egg-info/
 wandb
 datasets/
 gptfast/checkpoints/
+local_datasets/

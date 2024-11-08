@@ -14,8 +14,8 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 
-from aria.model.vision_encoder import AriaVisionModel, AriaVisionConfig
 from aria.model.projector import AriaProjector
+from aria.model.vision_encoder import AriaVisionConfig, AriaVisionModel
 
 
 def find_multiple(n: int, *args: Tuple[int]) -> int:

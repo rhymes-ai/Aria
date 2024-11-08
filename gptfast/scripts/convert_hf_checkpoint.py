@@ -8,12 +8,13 @@
 import json
 import re
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import torch
 from safetensors.torch import load_file as load_safetensors_file
-from dataclasses import dataclass
+
 
 @dataclass
 class ModelArgs:

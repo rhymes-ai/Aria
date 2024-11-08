@@ -15,11 +15,10 @@ import requests
 import torch
 import torch._dynamo.config
 import torch._inductor.config
+from model import Aria, ModelArgs, Transformer
 from PIL import Image
 from torch.nn.attention import SDPBackend
 from transformers import AutoProcessor, AutoTokenizer
-
-from model import Aria, ModelArgs, Transformer
 
 
 def get_model_size_in_bytes(model, ignore_embeddings=False):
