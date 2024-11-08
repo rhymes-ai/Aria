@@ -9,3 +9,5 @@ chartqa_result_*
 aria.egg-info/
 wandb
 datasets/
+gptfast/checkpoints/
+local_datasets/
