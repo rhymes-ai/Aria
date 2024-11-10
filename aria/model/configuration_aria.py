@@ -69,6 +69,7 @@ class AriaConfig(PretrainedConfig):
         self.image_token_index = image_token_index
 
         attn_implementation = kwargs.pop("attn_implementation", None)
+        self._attn_implementation = attn_implementation
 
         # Convert the keys and values of projector_patch_to_query_dict to integers
         # This ensures consistency even if they were provided as strings
@@ -95,3 +96,6 @@ class AriaConfig(PretrainedConfig):
             text_config._attn_implementation = text_attn_implementation
 
         self.text_config = text_config
+
+        # This is needed for the static kv cache
+        self.num_hidden_layers = self.text_config.num_hidden_layers
