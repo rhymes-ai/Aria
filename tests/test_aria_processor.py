@@ -81,7 +81,7 @@ def test_chat_template_with_multiple_messages(processor):
     )
 
 
-def test_end_to_end_processing(processor, sample_messages, sample_image):
+def test_end_to_end_processing_980(processor, sample_messages, sample_image):
     text = processor.apply_chat_template(sample_messages, add_generation_prompt=True)
     inputs, prompts = processor(
         text=text,
@@ -105,10 +105,36 @@ def test_end_to_end_processing(processor, sample_messages, sample_image):
     assert inputs["input_ids"].device.type == "cpu"
     assert inputs["pixel_values"].dtype == torch.float32
 
-    assert (
-        prompts[0]
-        == "<|im_start|>user\n<fim_prefix><|img|><fim_suffix>describe the image<|im_end|>\n<|im_start|>assistant\n"
+    expected_prompt = "<|im_start|>user\n<fim_prefix><|img|><fim_suffix>describe the image<|im_end|>\n<|im_start|>assistant\n"
+    expected_prompt = expected_prompt.replace("<|img|>", "<|img|>" * 256)
+
+    assert prompts[0] == expected_prompt
+
+
+def test_end_to_end_processing_490(processor, sample_messages, sample_image):
+    text = processor.apply_chat_template(sample_messages, add_generation_prompt=True)
+    inputs, prompts = processor(
+        text=text,
+        images=[sample_image],
+        return_tensors="pt",
+        max_image_size=490,
+        return_final_prompts=True,
     )
+
+    expected_prompt = "<|im_start|>user\n<fim_prefix><|img|><fim_suffix>describe the image<|im_end|>\n<|im_start|>assistant\n"
+    expected_prompt = expected_prompt.replace("<|img|>", "<|img|>" * 128)
+
+    assert prompts[0] == expected_prompt
+
+
+def test_end_to_end_processing_invalid_max_image_size(
+    processor, sample_messages, sample_image
+):
+    text = processor.apply_chat_template(sample_messages, add_generation_prompt=True)
+    with pytest.raises(ValueError):
+        processor(
+            text=text, images=[sample_image], return_tensors="pt", max_image_size=1000
+        )
 
 
 def test_multiple_images_in_conversation(processor, sample_image):
@@ -135,10 +161,10 @@ def test_multiple_images_in_conversation(processor, sample_image):
     assert "pixel_values" in inputs
     assert inputs["pixel_values"].shape[0] == 2  # Batch size should be 2 for two images
 
-    assert (
-        prompts[0]
-        == "<|im_start|>user\n<fim_prefix><|img|><fim_suffix><fim_prefix><|img|><fim_suffix>Compare the two images.<|im_end|>\n<|im_start|>assistant\n"
-    )
+    expected_prompt = "<|im_start|>user\n<fim_prefix><|img|><fim_suffix><fim_prefix><|img|><fim_suffix>Compare the two images.<|im_end|>\n<|im_start|>assistant\n"
+    expected_prompt = expected_prompt.replace("<|img|>", "<|img|>" * 256)
+
+    assert prompts[0] == expected_prompt
 
 
 def test_split_image(processor, sample_messages, sample_image):
@@ -155,7 +181,7 @@ def test_split_image(processor, sample_messages, sample_image):
     assert inputs["pixel_values"].shape == (5, 3, 490, 490)
     assert inputs["pixel_mask"].shape == (5, 490, 490)
 
-    assert (
-        prompts[0]
-        == "<|im_start|>user\n<fim_prefix><|img|><|img|><|img|><|img|><|img|><fim_suffix>describe the image<|im_end|>\n<|im_start|>assistant\n"
-    )
+    expected_prompt = "<|im_start|>user\n<fim_prefix><|img|><|img|><|img|><|img|><|img|><fim_suffix>describe the image<|im_end|>\n<|im_start|>assistant\n"
+    expected_prompt = expected_prompt.replace("<|img|>", "<|img|>" * 128)
+
+    assert prompts[0] == expected_prompt

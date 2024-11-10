@@ -169,6 +169,24 @@ class AriaProcessor(ProcessorMixin):
                     )
                 )
 
+            max_image_size = (
+                max_image_size
+                if max_image_size is not None
+                else self.image_processor.max_image_size
+            )
+            if max_image_size == 490:
+                num_image_tokens = 128
+            elif max_image_size == 980:
+                num_image_tokens = 256
+            else:
+                raise ValueError(
+                    f"max_image_size must be either 490 or 980, got {max_image_size}"
+                )
+            prompt_strings = [
+                sample.replace(self.image_token, self.image_token * num_image_tokens)
+                for sample in prompt_strings
+            ]
+
         else:
             image_inputs = {}
             prompt_strings = text
