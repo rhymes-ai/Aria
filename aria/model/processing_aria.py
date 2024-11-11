@@ -94,6 +94,7 @@ class AriaProcessor(ProcessorMixin):
         max_image_size: Optional[int] = 980,
         split_image: Optional[bool] = False,
         return_tensors: Optional[Union[str, TensorType]] = TensorType.PYTORCH,
+        return_final_prompts: Optional[bool] = False,
     ) -> BatchFeature:
         """
         Main method to prepare for the model one or several sequences(s) and image(s). Please refer to the doctsring
@@ -168,6 +169,24 @@ class AriaProcessor(ProcessorMixin):
                     )
                 )
 
+            max_image_size = (
+                max_image_size
+                if max_image_size is not None
+                else self.image_processor.max_image_size
+            )
+            if max_image_size == 490:
+                num_image_tokens = 128
+            elif max_image_size == 980:
+                num_image_tokens = 256
+            else:
+                raise ValueError(
+                    f"max_image_size must be either 490 or 980, got {max_image_size}"
+                )
+            prompt_strings = [
+                sample.replace(self.image_token, self.image_token * num_image_tokens)
+                for sample in prompt_strings
+            ]
+
         else:
             image_inputs = {}
             prompt_strings = text
@@ -180,7 +199,10 @@ class AriaProcessor(ProcessorMixin):
             max_length=max_length,
         )
 
-        return BatchFeature(data={**text_inputs, **image_inputs})
+        if return_final_prompts:
+            return BatchFeature(data={**text_inputs, **image_inputs}), prompt_strings
+        else:
+            return BatchFeature(data={**text_inputs, **image_inputs})
 
     @staticmethod
     def _extract_kwargs(func: callable, **kwargs) -> dict:
