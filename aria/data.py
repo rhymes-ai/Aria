@@ -120,62 +120,6 @@ def apply_chat_template_and_tokenize(
     }
 
 
-def apply_chat_template(messages: List[Dict], add_generation_prompt: bool = False):
-    """
-    Args:
-        messages: List of messages, each message is a dictionary with the following keys:
-            - role: str, either "user" or "assistant"
-            - content: List of content items, each item is a dictionary with the following keys:
-                - type: str, either "text" or "image"
-                - text: str, the text content if type is "text"
-    Returns:
-        str: A formatted string representing the chat messages between the user and the assistant
-
-    Example:
-    >>> messages = [
-            {
-                "content": [
-                    {"text": "Who wrote this book?\n", "type": "text"},
-                    {"text": None, "type": "image"},
-                ],
-                "role": "user",
-            },
-            {
-                "content": [{"text": "Sylvie Covey", "type": "text"}],
-                "role": "assistant",
-            },
-        ]
-    >>> apply_chat_template(messages)
-    """
-    res = ""
-    for message in messages:
-        if message["role"] == "user":
-            res += "<|im_start|>user\n"
-            for content in message["content"]:
-                if content["type"] == "text":
-                    res += content["text"]
-                elif content["type"] == "image":
-                    res += "<fim_prefix><|img|><fim_suffix>"
-                else:
-                    raise ValueError(
-                        f"Unknown content type {content['type']} in user message"
-                    )
-            res += "<|im_end|>\n"
-        elif message["role"] == "assistant":
-            res += "<|im_start|>assistant\n"
-            for content in message["content"]:
-                if content["type"] == "text":
-                    res += content["text"]
-                else:
-                    raise ValueError(
-                        f"Unknown content type {content['type']} in assistant message"
-                    )
-            res += "<|im_end|>\n"
-    if add_generation_prompt:
-        res += "<|im_start|>assistant\n"
-    return res
-
-
 def load_local_dataset(path, num_proc=8):
     """
     Load a local dataset from the specified path and return it as a DatasetDict.
