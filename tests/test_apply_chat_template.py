@@ -26,8 +26,32 @@ def test_apply_chat_template_single_user_message(tokenizer):
         }
     ]
     expected_output = "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n"
+    expected_output = expected_output.replace("<|img|>", "<|img|>" * 256)
     res = apply_chat_template_and_tokenize(
         [messages], num_image_crop=iter([1]), tokenizer=tokenizer
+    )
+    input_ids = res["input_ids"]
+    input_str = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
+    assert input_str == expected_output
+
+    labels = res["labels"]
+    assert (labels == -100).sum() == input_ids.numel()
+
+
+def test_apply_chat_template_single_user_message_490(tokenizer):
+    messages = [
+        {
+            "content": [
+                {"text": "Who wrote this book?\n", "type": "text"},
+                {"text": None, "type": "image"},
+            ],
+            "role": "user",
+        }
+    ]
+    expected_output = "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n"
+    expected_output = expected_output.replace("<|img|>", "<|img|>" * 128)
+    res = apply_chat_template_and_tokenize(
+        [messages], num_image_crop=iter([1]), tokenizer=tokenizer, max_image_size=490
     )
     input_ids = res["input_ids"]
     input_str = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
@@ -66,6 +90,7 @@ def test_apply_chat_template_multiple_messages(tokenizer):
         },
     ]
     expected_output = "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n<|im_start|>assistant\nSylvie Covey<|im_end|>\n"
+    expected_output = expected_output.replace("<|img|>", "<|img|>" * 256)
     res = apply_chat_template_and_tokenize(
         [messages], num_image_crop=iter([1]), tokenizer=tokenizer
     )
@@ -122,6 +147,7 @@ def test_apply_chat_template_multi_round_messages(tokenizer):
         },
     ]
     expected_output = "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n<|im_start|>assistant\nSylvie Covey<|im_end|>\n<|im_start|>user\nWhat is the title of this book?<|im_end|>\n<|im_start|>assistant\nModern Printmaking: A Guide to Traditional and Digital Techniques<|im_end|>\n"
+    expected_output = expected_output.replace("<|img|>", "<|img|>" * 256)
     res = apply_chat_template_and_tokenize(
         [messages], num_image_crop=iter([1]), tokenizer=tokenizer
     )
@@ -186,6 +212,10 @@ def test_apply_chat_template_batch_messages(tokenizer):
     expected_output = [
         "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n<|im_start|>assistant\nSylvie Covey<|im_end|>\n",
         "<|im_start|>user\nWho wrote this book?\n<fim_prefix><|img|><fim_suffix><|im_end|>\n<|im_start|>assistant\nSylvie Covey<|im_end|>\n<|im_start|>user\nWhat is the title of this book?<|im_end|>\n<|im_start|>assistant\nModern Printmaking: A Guide to Traditional and Digital Techniques<|im_end|>\n",
+    ]
+    expected_output = [
+        expected_output[0].replace("<|img|>", "<|img|>" * 256),
+        expected_output[1].replace("<|img|>", "<|img|>" * 256),
     ]
     assert (
         tokenizer.batch_decode(input_ids, skip_special_tokens=True) == expected_output

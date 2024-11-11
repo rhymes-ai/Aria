@@ -31,6 +31,7 @@ def apply_chat_template_and_tokenize(
     tokenizer,
     num_image_crop: Iterable[torch.Tensor] = iter([]),
     max_length: int = 1024,
+    max_image_size: int = 980,
 ):
     IGNORE_TOKEN_ID = -100
     im_start_tokens = tokenizer("<|im_start|>").input_ids
@@ -75,6 +76,16 @@ def apply_chat_template_and_tokenize(
         for message in messages:
             role = message["role"]
             text = "".join(process_content(content) for content in message["content"])
+
+            if max_image_size == 490:
+                num_image_tokens = 128
+            elif max_image_size == 980:
+                num_image_tokens = 256
+            else:
+                raise ValueError(
+                    f"max_image_size must be either 490 or 980, got {max_image_size}"
+                )
+            text = text.replace("<|img|>", "<|img|>" * num_image_tokens)
 
             _input_id = tokenize_message(role, text)
             input_id.extend(_input_id)

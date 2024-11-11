@@ -194,6 +194,7 @@ def collate_fn(
             tokenizer,
             iter(image_inputs.pop("num_crops")),
             max_length=max_seq_length,
+            max_image_size=processor.max_image_size,
         )
 
         batch.update(image_inputs)
