@@ -12,3 +12,4 @@ datasets/
 gptfast/checkpoints/
 local_datasets/
 eval
+build/
