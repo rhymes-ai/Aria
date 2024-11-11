@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import nn
-from transformers import LlamaConfig
+from transformers import GenerationMixin, LlamaConfig
 from transformers.models.llama.modeling_llama import (
     ACT2FN,
     LLAMA_ATTENTION_CLASSES,
@@ -634,7 +634,7 @@ class AriaMoELMModel(LlamaModel):
         self.post_init()
 
 
-class AriaMoELMForCausalLM(LlamaForCausalLM):
+class AriaMoELMForCausalLM(LlamaForCausalLM, GenerationMixin):
     """
     AriaMoE model for causal language modeling tasks.
 

@@ -23,7 +23,7 @@ from typing import List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 from torch import nn
-from transformers import PreTrainedModel
+from transformers import GenerationMixin, PreTrainedModel
 from transformers.modeling_outputs import ModelOutput
 from transformers.utils import logging
 
@@ -122,7 +122,7 @@ def build_mm_projector(config: AriaConfig):
 
 
 # adapted from transformers.models.llava.modeling_llava.LlavaForConditionalGeneration
-class AriaForConditionalGeneration(AriaPretrainedModel):
+class AriaForConditionalGeneration(AriaPretrainedModel, GenerationMixin):
     """
     Aria model for conditional generation tasks.
 
