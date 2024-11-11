@@ -21,6 +21,9 @@ from transformers.configuration_utils import PretrainedConfig
 
 from .moe_lm import AriaMoELMConfig
 from .vision_encoder import AriaVisionConfig
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # adapted from transformers.models.llava.configuration_llava.LlavaConfig
@@ -79,11 +82,13 @@ class AriaConfig(PretrainedConfig):
 
         if isinstance(vision_config, dict) and "model_type" in vision_config:
             vision_config = AriaVisionConfig(**vision_config)
-            vision_attn_implementation = (
-                "flash_attention_2"
-                if attn_implementation is None
-                else attn_implementation
-            )
+            if attn_implementation is None:
+                vision_attn_implementation = "flash_attention_2"
+            elif attn_implementation == "sdpa":
+                logger.warning("SDPA is not supported for vit, using flash_attention_2 instead")
+                vision_attn_implementation = "flash_attention_2"
+            else:
+                vision_attn_implementation = attn_implementation
             vision_config._attn_implementation = vision_attn_implementation
 
         self.vision_config = vision_config
