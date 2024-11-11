@@ -17,11 +17,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import logging
+
 from transformers.configuration_utils import PretrainedConfig
 
 from .moe_lm import AriaMoELMConfig
 from .vision_encoder import AriaVisionConfig
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,9 @@ class AriaConfig(PretrainedConfig):
             if attn_implementation is None:
                 vision_attn_implementation = "flash_attention_2"
             elif attn_implementation == "sdpa":
-                logger.warning("SDPA is not supported for vit, using flash_attention_2 instead")
+                logger.warning(
+                    "SDPA is not supported for vit, using flash_attention_2 instead"
+                )
                 vision_attn_implementation = "flash_attention_2"
             else:
                 vision_attn_implementation = attn_implementation
