@@ -332,6 +332,7 @@ class AriaForConditionalGeneration(AriaPretrainedModel, GenerationMixin):
         past_key_values=None,
         inputs_embeds=None,
         pixel_values=None,
+        pixel_mask=None,
         attention_mask=None,
         cache_position=None,
         num_logits_to_keep=None,
@@ -351,5 +352,6 @@ class AriaForConditionalGeneration(AriaPretrainedModel, GenerationMixin):
             # If we're in cached decoding stage, pixel values should be None because input ids do not contain special image token anymore
             # Otherwise we need pixel values to be passed to model
             model_inputs["pixel_values"] = pixel_values
+            model_inputs["pixel_mask"] = pixel_mask
 
         return model_inputs
