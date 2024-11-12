@@ -25,6 +25,7 @@ pip install -e .
 # or install with dev dependencies if you want to contribute to the project
 pip install -e .[dev] 
 
+pip install grouped_gemm
 pip install flash-attn --no-build-isolation
 ```
 
@@ -86,6 +87,11 @@ We offer additional inference methods, such as utilizing [vLLM](https://github.c
 Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/inference/notebooks) that demonstrate how to use Aria on various applications such as chart understanding, PDF reading, video understanding, etc, available with both Hugging Face Transformers and [vLLM](https://github.com/vllm-project/vllm) backends.
 
 ## Fine-tuning
+
+> **Note:** For optimal fine-tuning performance, install the optional `grouped_gemm` dependency:
+> ```bash
+> pip install grouped_gemm
+> ```
 
 We offer both LoRA fine-tuning and full parameter tuning, using various dataset types:
 - Single-image datasets
