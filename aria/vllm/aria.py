@@ -29,14 +29,9 @@ from transformers import LlamaConfig
 from transformers.utils import logging
 from vllm.attention import AttentionMetadata
 from vllm.config import CacheConfig, LoRAConfig, MultiModalConfig
-from vllm.distributed import (
-    divide,
-    get_pp_group,
-    get_tensor_model_parallel_rank,
-    get_tensor_model_parallel_world_size,
-    tensor_model_parallel_all_reduce,
-)
+from vllm.distributed import divide, get_pp_group, tensor_model_parallel_all_reduce
 from vllm.inputs import INPUT_REGISTRY, LLMInputs
+from vllm.model_executor.layers.fused_moe import fused_moe
 from vllm.model_executor.layers.layernorm import RMSNorm
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
@@ -471,8 +466,10 @@ class GroupedGEMM(nn.Module):
 
     def __init__(self, in_features, out_features, groups, tp_dim):
         super().__init__()
-        self.tp_size = get_tensor_model_parallel_world_size()
-        self.tp_rank = get_tensor_model_parallel_rank()
+        # self.tp_size = get_tensor_model_parallel_world_size()
+        # self.tp_rank = get_tensor_model_parallel_rank()
+        self.tp_size = 1
+        self.tp_rank = 0
         self.tp_dim = tp_dim
         self.in_features = in_features
         self.out_features = out_features
@@ -496,7 +493,7 @@ class GroupedGEMM(nn.Module):
                 weights = torch.cat([ups, gates], dim=-1)
                 param.data.copy_(weights)
         else:
-            param.data.copy_(loaded_weight)
+            param.data.copy_(loaded_weight.transpose(1, 2).contiguous())
 
     def forward(self, input, tokens_per_expert):
         """
@@ -522,17 +519,18 @@ class GroupedMLP(nn.Module):
 
     def __init__(self, config: AriaMoELMConfig) -> None:
         super().__init__()
-        tp_size = get_tensor_model_parallel_world_size()
+        # tp_size = get_tensor_model_parallel_world_size()
+        tp_size = 1
         self.config = config
         self.fc1 = GroupedGEMM(
-            config.hidden_size,
             divide(config.moe_intermediate_size * 2, tp_size),
+            config.hidden_size,
             config.moe_num_experts,
             "col",
         )
         self.fc2 = GroupedGEMM(
-            divide(config.moe_intermediate_size, tp_size),
             config.hidden_size,
+            divide(config.moe_intermediate_size, tp_size),
             config.moe_num_experts,
             "row",
         )
@@ -588,6 +586,7 @@ class MoELayer(nn.Module):
         lora_config: Optional[LoRAConfig],
     ) -> None:
         super().__init__()
+        self.config = config
 
         self.router = TopKRouter(config)
         self.token_dispatcher = TokenDispatcher(config)
@@ -608,27 +607,35 @@ class MoELayer(nn.Module):
 
         Returns:
             torch.Tensor: Output tensor after passing through the MoE layer.
-
-        Process:
-        1. Route tokens to experts using the router.
-        2. Permute tokens based on routing decisions.
-        3. Process tokens through experts.
-        4. Unpermute and combine expert outputs.
-        5. Add shared expert output to the final result.
         """
-        scores, indices, tokens_per_expert = self.router(hidden_states)
 
-        permuted_tokens = self.token_dispatcher.token_permutation(
-            hidden_states, indices
-        )
-
-        expert_output = self.experts(permuted_tokens, tokens_per_expert)
-
-        output = self.token_dispatcher.token_unpermutation(expert_output, scores)
+        def custom_routing_function(hidden_states, gating_output, topk, renormalize):
+            top_logits, top_indices = torch.topk(
+                gating_output, k=self.config.moe_topk, dim=1
+            )
+            scores = torch.softmax(top_logits, dim=-1, dtype=torch.float32)
+            return scores, top_indices.to(torch.int32)
 
         shared_expert_output = self.shared_experts(hidden_states)
-        output += shared_expert_output
-        return output
+
+        hidden_states_shape = hidden_states.shape
+        hidden_states = hidden_states.view(-1, hidden_states.size(-1))
+        router_logits = self.router.gating(hidden_states)
+        w1 = self.experts.fc1.weight
+        w2 = self.experts.fc2.weight
+        final_hidden_states = fused_moe(
+            hidden_states,
+            w1,
+            w2,
+            router_logits,
+            self.config.moe_topk,
+            False,
+            inplace=True,
+            custom_routing_function=custom_routing_function,
+        )
+        final_hidden_states = final_hidden_states.view(hidden_states_shape)
+        final_hidden_states += shared_expert_output
+        return final_hidden_states
 
 
 class MoEDecoderLayer(LlamaDecoderLayer):
