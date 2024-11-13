@@ -27,7 +27,12 @@ from transformers import LlamaConfig
 from transformers.utils import logging
 from vllm.attention import AttentionMetadata
 from vllm.config import CacheConfig, LoRAConfig, MultiModalConfig
-from vllm.distributed import get_pp_group
+from vllm.distributed import (
+    get_pp_group,
+    get_tensor_model_parallel_rank,
+    get_tensor_model_parallel_world_size,
+    tensor_model_parallel_all_reduce,
+)
 from vllm.inputs import INPUT_REGISTRY, LLMInputs
 from vllm.model_executor.layers.fused_moe import fused_moe
 from vllm.model_executor.layers.layernorm import RMSNorm
@@ -126,11 +131,18 @@ class Experts(nn.Module):
             torch.empty((self.config.moe_num_experts, self.config.hidden_size))
         )
 
+        self.tp_size = get_tensor_model_parallel_world_size()
+        self.tp_rank = get_tensor_model_parallel_rank()
+        if self.tp_size > config.moe_num_experts:
+            raise ValueError(
+                f"Tensor model parallel size {self.tp_size} is greater than the number of experts {config.moe_num_experts}"
+            )
+
         self.w1 = nn.Parameter(
             torch.empty(
                 (
                     config.moe_num_experts,
-                    config.moe_intermediate_size * 2,
+                    config.moe_intermediate_size * 2 // self.tp_size,
                     config.hidden_size,
                 )
             )
@@ -140,7 +152,7 @@ class Experts(nn.Module):
                 (
                     config.moe_num_experts,
                     config.hidden_size,
-                    config.moe_intermediate_size,
+                    config.moe_intermediate_size // self.tp_size,
                 )
             )
         )
@@ -153,8 +165,27 @@ class Experts(nn.Module):
     ):
         if shard_id == "router":
             param.data.copy_(loaded_weight)
+        elif shard_id == "w1":
+            if self.tp_size > 1:
+                # the shape of loaded_weight is (num_experts, hidden_size, 2 * moe_intermediate_size)
+                up, gate = loaded_weight.chunk(2, dim=-1)
+                up_current_rank = up.chunk(self.tp_size, dim=-1)[self.tp_rank]
+                gate_current_rank = gate.chunk(self.tp_size, dim=-1)[self.tp_rank]
+                up_and_gate = torch.cat(
+                    [up_current_rank, gate_current_rank], dim=-1
+                ).transpose(1, 2)
+                param.data.copy_(up_and_gate)
+            else:
+                param.data.copy_(loaded_weight.transpose(1, 2))
         else:
-            param.data.copy_(loaded_weight.transpose(1, 2).contiguous())
+            if self.tp_size > 1:
+                # the shape of loaded_weight is (num_experts, moe_intermediate_size, hidden_size)
+                down_current_rank = loaded_weight.chunk(self.tp_size, dim=1)[
+                    self.tp_rank
+                ]
+                param.data.copy_(down_current_rank.transpose(1, 2))
+            else:
+                param.data.copy_(loaded_weight.transpose(1, 2))
 
     def forward(self, hidden_states):
         router_output = torch.nn.functional.linear(hidden_states, self.router_weight)
@@ -179,6 +210,7 @@ class Experts(nn.Module):
             custom_routing_function=custom_routing_function,
         )
         final_hidden_states = final_hidden_states.view(hidden_states_shape)
+        final_hidden_states = tensor_model_parallel_all_reduce(final_hidden_states)
         return final_hidden_states
 
 
