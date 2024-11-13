@@ -83,6 +83,12 @@ pip install -e .[vllm]
 ```
 
 ### How to Use:
+
+> **NOTE:** If you encounter a "RuntimeError: Cannot re-initialize CUDA in forked subprocess. To use CUDA with multiprocessing, you must use the 'spawn' start method" when enabling tensor parallelism, you can try setting the following environment variable:
+> ```bash
+> export VLLM_WORKER_MULTIPROC_METHOD="spawn"
+> ```
+
 ```python
 from PIL import Image
 from transformers import AutoTokenizer
