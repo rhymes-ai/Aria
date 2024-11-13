@@ -17,26 +17,24 @@
 # specific language governing permissions and limitations
 # under the License.
 import math
-import os
 from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from PIL import Image
 from transformers import LlamaConfig
 from transformers.utils import logging
 from vllm.attention import AttentionMetadata
 from vllm.config import CacheConfig, LoRAConfig, MultiModalConfig
 from vllm.distributed import (
-    divide,
     get_pp_group,
     get_tensor_model_parallel_rank,
     get_tensor_model_parallel_world_size,
     tensor_model_parallel_all_reduce,
 )
 from vllm.inputs import INPUT_REGISTRY, LLMInputs
+from vllm.model_executor.layers.fused_moe import fused_moe
 from vllm.model_executor.layers.layernorm import RMSNorm
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
@@ -124,449 +122,96 @@ class AriaMoELMConfig(LlamaConfig):
         self.moe_num_shared_experts = moe_num_shared_experts
 
 
-# copied from https://github.com/NVIDIA/Megatron-LM/blob/54f1f78529cbc2b9cddad313e7f9d96ac0420a27/megatron/core/transformer/moe/moe_utils.py#L101-L142
-class MoEAuxLossAutoScaler(torch.autograd.Function):
-    """An AutoScaler that compute and scales the grad for auxiliary loss."""
-
-    main_loss_backward_scale: torch.Tensor = torch.tensor(1.0)
-
-    @staticmethod
-    def forward(ctx, output: torch.Tensor, aux_loss: torch.Tensor):
-        """Preserve the aux_loss by storing it in the context to avoid garbage collection.
-
-        Args:
-            output (torch.Tensor): The output tensor.
-            aux_loss (torch.Tensor): The auxiliary loss tensor.
-
-        Returns:
-            torch.Tensor: The output tensor.
-        """
-        ctx.save_for_backward(aux_loss)
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output: torch.Tensor):
-        """Compute and scale the gradient for auxiliary loss..
-
-        Args:
-            grad_output (torch.Tensor): The gradient of the output.
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]: The gradient of the output, scaled auxiliary loss gradient.
-        """
-        (aux_loss,) = ctx.saved_tensors
-        aux_loss_backward_scale = MoEAuxLossAutoScaler.main_loss_backward_scale
-        scaled_aux_loss_grad = torch.ones_like(aux_loss) * aux_loss_backward_scale
-        return grad_output, scaled_aux_loss_grad
-
-    @staticmethod
-    def set_loss_scale(scale: torch.Tensor):
-        """set the scale of the aux loss.
-
-        Args:
-            scale (torch.Tensor): The scale value to set. Please ensure that the scale passed in matches the scale of the main_loss.
-        """
-        MoEAuxLossAutoScaler.main_loss_backward_scale = scale
-
-
-def z_loss_func(logits, z_loss_coeff):
-    """Encourages the router's logits to remain small to enhance stability.
-    Please refer to the ST-MoE paper (https://arxiv.org/pdf/2202.08906.pdf) for details.
-
-    Args:
-        logits (torch.Tensor): The logits of the router.
-
-    Returns:
-        torch.Tensor: The logits after applying the z-loss.
-    """
-
-    z_loss = torch.mean(torch.square(torch.logsumexp(logits, dim=-1))) * z_loss_coeff
-    return z_loss
-
-
-def switch_load_balancing_loss_func(
-    probs: torch.Tensor,
-    tokens_per_expert: torch.Tensor,
-    topk: int,
-    moe_aux_loss_coeff: float,
-):
-    """Calculate the auxiliary loss for better load balacing.
-    Please refer to the Switch Transformer paper (https://arxiv.org/abs/2101.03961) for details.
-
-    Args:
-        probs (torch.Tensor): The softmax probs output by the router for each token. [num_tokens, num_experts]
-        tokens_per_expert (torch.Tensor): The number of assigned tokens for each expert. [num_experts]
-
-    Returns:
-        torch.Tensor: The auxiliary loss for load balancing.
-    """
-    num_tokens = probs.shape[0] * topk
-    num_experts = probs.shape[1]
-
-    probs_mean_per_expert = probs.mean(dim=0)
-    aux_loss = torch.sum(probs_mean_per_expert * tokens_per_expert) * (
-        num_experts / num_tokens * moe_aux_loss_coeff
-    )
-    return aux_loss
-
-
-# adapted from https://github.com/NVIDIA/Megatron-LM/blob/54f1f78529cbc2b9cddad313e7f9d96ac0420a27/megatron/core/transformer/moe/router.py#L96-L304
-class TopKRouter(nn.Module):
-    """
-    Top-K Router for Mixture of Experts (MoE) models.
-
-    This router determines which experts should process each token based on the top-k scoring experts.
-    It also applies auxiliary losses to encourage load balancing among experts.
-
-    Args:
-        config (AriaMoELMConfig): Configuration object containing MoE-related parameters.
-    """
-
+class Experts(nn.Module):
     def __init__(self, config: AriaMoELMConfig):
         super().__init__()
         self.config = config
 
-        self.weight = nn.Parameter(
+        self.router_weight = nn.Parameter(
             torch.empty((self.config.moe_num_experts, self.config.hidden_size))
         )
-        # FIXME: initialize the weight
 
-    def gating(self, input: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the gating logits for each token-expert pair.
-
-        Args:
-            input (torch.Tensor): Input tensor of shape [batch_size * seq_len, hidden_size].
-
-        Returns:
-            torch.Tensor: Logits tensor of shape [batch_size * seq_len, num_experts].
-        """
-        logits = torch.nn.functional.linear(input, self.weight)
-        return logits
-
-    def apply_z_loss(self, logits: torch.Tensor) -> torch.Tensor:
-        """
-        Apply z-loss to encourage router logits to remain small for enhanced stability.
-
-        Args:
-            logits (torch.Tensor): Router logits.
-
-        Returns:
-            torch.Tensor: Logits with z-loss applied.
-        """
-        z_loss = z_loss_func(logits, self.config.moe_z_loss_coeff)
-        logits = MoEAuxLossAutoScaler.apply(logits, z_loss)
-        return logits
-
-    def apply_aux_loss(
-        self,
-        logits: torch.Tensor,
-        tokens_per_expert: torch.Tensor,
-        activation: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Apply auxiliary loss for load balancing among experts.
-
-        Args:
-            logits (torch.Tensor): Router logits.
-            tokens_per_expert (torch.Tensor): Number of tokens assigned to each expert.
-            activation (torch.Tensor): Activation values.
-
-        Returns:
-            torch.Tensor: Activation with auxiliary loss applied.
-        """
-        probs = torch.softmax(logits, dim=-1, dtype=torch.float32)
-        aux_loss = switch_load_balancing_loss_func(
-            probs,
-            tokens_per_expert,
-            self.config.moe_topk,
-            self.config.moe_aux_loss_coeff,
-        )
-        return MoEAuxLossAutoScaler.apply(activation, aux_loss)
-
-    def routing(
-        self, logits: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Perform the routing operation to determine expert assignments.
-
-        Args:
-            logits (torch.Tensor): Router logits.
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-                - scores: Softmax probabilities for top-k experts.
-                - top_indices: Indices of top-k experts for each token.
-                - tokens_per_expert: Number of tokens assigned to each expert.
-        """
-        logits = self.apply_z_loss(logits)
-
-        top_logits, top_indices = torch.topk(logits, k=self.config.moe_topk, dim=1)
-        scores = torch.softmax(top_logits, dim=-1, dtype=torch.float32).type_as(logits)
-
-        tokens_per_expert = torch.histc(
-            top_indices.flatten(),
-            bins=self.config.moe_num_experts,
-            min=0,
-            max=self.config.moe_num_experts - 1,
-        )
-
-        scores = self.apply_aux_loss(logits, tokens_per_expert, scores)
-        return scores, top_indices, tokens_per_expert
-
-    def forward(
-        self, input: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Forward pass of the TopKRouter.
-
-        Args:
-            input (torch.Tensor): Input tensor of shape [batch_size * seq_len, hidden_size].
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-                - scores: Softmax probabilities for top-k experts.
-                - top_indices: Indices of top-k experts for each token.
-                - tokens_per_expert: Number of tokens assigned to each expert.
-        """
-        logits = self.gating(input)
-        logits = logits.view(-1, self.config.moe_num_experts)
-        scores, top_indices, tokens_per_expert = self.routing(logits)
-        return scores, top_indices, tokens_per_expert
-
-
-# adapted from https://github.com/NVIDIA/Megatron-LM/blob/54f1f78529cbc2b9cddad313e7f9d96ac0420a27/megatron/core/transformer/moe/token_dispatcher.py#L291-L587
-class TokenDispatcher:
-    """
-    Handles the dispatching and gathering of tokens to and from experts.
-
-    This class is responsible for permuting tokens based on expert assignments and
-    unpermuting them after expert processing.
-
-    Args:
-        config (AriaMoELMConfig): Configuration object containing MoE-related parameters.
-    """
-
-    def __init__(self, config: AriaMoELMConfig):
-        self.config = config
-        self.hidden_states_shape = None
-        self.reversed_input_permutation_mapping = None
-
-    def token_permutation(
-        self, hidden_states: torch.Tensor, indices: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Permute tokens based on expert assignments.
-
-        Args:
-            hidden_states (torch.Tensor): Input hidden states.
-            indices (torch.Tensor): Expert assignment indices.
-
-        Returns:
-            torch.Tensor: Permuted tokens.
-        """
-        self.hidden_states_shape = hidden_states.shape
-        hidden_states = hidden_states.view(-1, hidden_states.size(-1))
-        flatten_indices = indices.flatten()
-        sorted_indices = torch.argsort(flatten_indices, stable=True)
-        permuted_tokens = hidden_states.index_select(
-            0, sorted_indices // self.config.moe_topk
-        )
-        self.reversed_input_permutation_mapping = sorted_indices
-        return permuted_tokens
-
-    def token_unpermutation(
-        self, permuted_tokens: torch.Tensor, scores: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Unpermute tokens and combine expert outputs.
-
-        Args:
-            permuted_tokens (torch.Tensor): Tokens after expert processing.
-            scores (torch.Tensor): Expert assignment scores.
-
-        Returns:
-            torch.Tensor: Unpermuted and combined output.
-        """
-        num_unpermuted_tokens = scores.numel()
-        unpermuted_tokens = torch.zeros(
-            (num_unpermuted_tokens, permuted_tokens.size(1)),
-            dtype=permuted_tokens.dtype,
-            device=permuted_tokens.device,
-        )
-        unpermuted_tokens.index_copy_(
-            0, self.reversed_input_permutation_mapping, permuted_tokens
-        )
-        unpermuted_tokens = unpermuted_tokens.reshape(
-            -1, self.config.moe_topk, permuted_tokens.size(1)
-        )
-
-        unpermuted_tokens = unpermuted_tokens * scores.unsqueeze(-1)
-        unpermuted_tokens = unpermuted_tokens.sum(dim=1).type_as(permuted_tokens)
-        output = unpermuted_tokens.view(self.hidden_states_shape)
-        return output
-
-
-def sequential_gemm(input, weight, tokens_per_expert):
-    """
-    Compute the matrix multiplication (GEMM) for each expert sequentially. This approach is computationally inefficient, especially when dealing with a large number of experts.
-
-    Args:
-        input (torch.Tensor): Input tensor of shape (num_tokens, in_features).
-        weight (torch.Tensor): Weight tensor of shape (num_experts, in_features, out_features).
-        tokens_per_expert (torch.Tensor): Number of tokens assigned to each expert.
-
-    Returns:
-        torch.Tensor: Output tensor of shape (num_tokens, out_features).
-    """
-    num_tokens = input.shape[0]
-    out_features = weight.shape[-1]
-    output = torch.zeros(
-        num_tokens, out_features, dtype=input.dtype, device=input.device
-    )
-
-    cumsum_num_tokens = torch.cumsum(tokens_per_expert, dim=0)
-    # Insert zero at the begining for offset index's convenience
-    zero_tensor = torch.zeros(1, dtype=torch.long, device=cumsum_num_tokens.device)
-    cumsum_num_tokens = torch.cat((zero_tensor, cumsum_num_tokens))
-
-    for expert_num in range(weight.shape[0]):
-        start = cumsum_num_tokens[expert_num]
-        end = cumsum_num_tokens[expert_num + 1]
-        tokens = input[start:end]
-
-        out = torch.matmul(tokens, weight[expert_num])
-        output[start:end] = out
-    return output
-
-
-try:
-    from grouped_gemm.ops import gmm as experts_gemm
-
-    if os.environ.get("USE_GROUPED_GEMM", "1") == "0":
-        logger.warning(
-            "environment variable USE_GROUPED_GEMM is set to 0, using sequential GEMM instead."
-        )
-        experts_gemm = sequential_gemm
-except ImportError:
-    logger.warning(
-        "`grouped_gemm` is not installed, using sequential GEMM, which is slower."
-    )
-    experts_gemm = sequential_gemm
-
-
-class GroupedGEMM(nn.Module):
-    """
-    Grouped GEMM (General Matrix Multiplication) module for efficient expert computation.
-    This module utilizes the grouped_gemm library (https://github.com/fanshiqing/grouped_gemm)
-    for optimized performance. If the grouped_gemm library is not installed, it gracefully
-    falls back to a sequential GEMM implementation, which may be slower but ensures
-    functionality.
-
-    Args:
-        in_features (int): Number of input features.
-        out_features (int): Number of output features.
-        groups (int): Number of expert groups.
-    """
-
-    def __init__(self, in_features, out_features, groups, tp_dim):
-        super().__init__()
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
-        self.tp_dim = tp_dim
-        self.in_features = in_features
-        self.out_features = out_features
-        self.groups = groups
-        self.weight = nn.Parameter(torch.empty(groups, in_features, out_features))
-        set_weight_attrs(self.weight, {"weight_loader": self.weight_loader})
-
-    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor):
-        if self.tp_size > 1:
-            if self.tp_dim == "row":
-                shard_size = self.in_features
-                start_idx = self.tp_rank * shard_size
-                param.data.copy_(loaded_weight.narrow(1, start_idx, shard_size))
-            else:
-                ups, gates = [], []
-                for g in range(self.groups):
-                    up, gate = loaded_weight[g].chunk(2, -1)
-                    ups.append(up.chunk(self.tp_size, -1)[self.tp_rank])
-                    gates.append(gate.chunk(self.tp_size, -1)[self.tp_rank])
-                ups, gates = torch.stack(ups), torch.stack(gates)
-                weights = torch.cat([ups, gates], dim=-1)
-                param.data.copy_(weights)
-        else:
-            param.data.copy_(loaded_weight)
-
-    def forward(self, input, tokens_per_expert):
-        """
-        Perform grouped matrix multiplication.
-
-        Args:
-            input (torch.Tensor): Input tensor of shape (num_tokens, in_features).
-            tokens_per_expert (torch.Tensor): Number of tokens assigned to each expert.
-
-        Returns:
-            torch.Tensor: Output tensor of shape (num_tokens, out_features).
-        """
-        return experts_gemm(input, self.weight, tokens_per_expert)
-
-
-class GroupedMLP(nn.Module):
-    """
-    Grouped MLP module for Mixture of Experts.
-
-    Args:
-        config (AriaMoELMConfig): Configuration object for the model.
-    """
-
-    def __init__(self, config: AriaMoELMConfig) -> None:
-        super().__init__()
-        tp_size = get_tensor_model_parallel_world_size()
-        self.config = config
-        self.fc1 = GroupedGEMM(
-            config.hidden_size,
-            divide(config.moe_intermediate_size * 2, tp_size),
-            config.moe_num_experts,
-            "col",
-        )
-        self.fc2 = GroupedGEMM(
-            divide(config.moe_intermediate_size, tp_size),
-            config.hidden_size,
-            config.moe_num_experts,
-            "row",
-        )
-
-        def glu(x):
-            x = torch.chunk(x, 2, dim=-1)
-            return F.silu(x[0]) * x[1]
-
-        # Manually hook the forward pass to perform tensor model parallel all-reduce
-        if tp_size > 1:
-            self.register_forward_hook(
-                lambda _, __, output_parallel: tensor_model_parallel_all_reduce(
-                    output_parallel
-                )
+        if self.tp_size > config.moe_num_experts:
+            raise ValueError(
+                f"Tensor model parallel size {self.tp_size} is greater than the number of experts {config.moe_num_experts}"
             )
 
-        self.activation_func = glu
+        self.w1 = nn.Parameter(
+            torch.empty(
+                (
+                    config.moe_num_experts,
+                    config.moe_intermediate_size * 2 // self.tp_size,
+                    config.hidden_size,
+                )
+            )
+        )
+        self.w2 = nn.Parameter(
+            torch.empty(
+                (
+                    config.moe_num_experts,
+                    config.hidden_size,
+                    config.moe_intermediate_size // self.tp_size,
+                )
+            )
+        )
+        set_weight_attrs(self.router_weight, {"weight_loader": self.weight_loader})
+        set_weight_attrs(self.w1, {"weight_loader": self.weight_loader})
+        set_weight_attrs(self.w2, {"weight_loader": self.weight_loader})
 
-    def forward(self, permuted_tokens, tokens_per_expert):
-        """
-        Forward pass of the Grouped MLP.
+    def weight_loader(
+        self, param: nn.Parameter, loaded_weight: torch.Tensor, shard_id: str
+    ):
+        if shard_id == "router":
+            param.data.copy_(loaded_weight)
+        elif shard_id == "w1":
+            if self.tp_size > 1:
+                # the shape of loaded_weight is (num_experts, hidden_size, 2 * moe_intermediate_size)
+                up, gate = loaded_weight.chunk(2, dim=-1)
+                up_current_rank = up.chunk(self.tp_size, dim=-1)[self.tp_rank]
+                gate_current_rank = gate.chunk(self.tp_size, dim=-1)[self.tp_rank]
+                up_and_gate = torch.cat(
+                    [up_current_rank, gate_current_rank], dim=-1
+                ).transpose(1, 2)
+                param.data.copy_(up_and_gate)
+            else:
+                param.data.copy_(loaded_weight.transpose(1, 2))
+        else:
+            if self.tp_size > 1:
+                # the shape of loaded_weight is (num_experts, moe_intermediate_size, hidden_size)
+                down_current_rank = loaded_weight.chunk(self.tp_size, dim=1)[
+                    self.tp_rank
+                ]
+                param.data.copy_(down_current_rank.transpose(1, 2))
+            else:
+                param.data.copy_(loaded_weight.transpose(1, 2))
 
-        Args:
-            permuted_tokens (torch.Tensor): Permuted input tokens.
-            tokens_per_expert (torch.Tensor): Number of tokens assigned to each expert.
+    def forward(self, hidden_states):
+        router_output = torch.nn.functional.linear(hidden_states, self.router_weight)
 
-        Returns:
-            torch.Tensor: Output tensor after passing through the MLP.
-        """
-        tokens_per_expert = tokens_per_expert.cpu()
-        fc1_output = self.fc1(permuted_tokens, tokens_per_expert)
-        fc1_output = self.activation_func(fc1_output)
-        fc2_output = self.fc2(fc1_output, tokens_per_expert)
-        return fc2_output
+        def custom_routing_function(hidden_states, router_output, topk, renormalize):
+            top_logits, top_indices = torch.topk(
+                router_output, k=self.config.moe_topk, dim=1
+            )
+            scores = torch.softmax(top_logits, dim=-1, dtype=torch.float32)
+            return scores, top_indices.to(torch.int32)
+
+        hidden_states_shape = hidden_states.shape
+        hidden_states = hidden_states.view(-1, hidden_states.size(-1))
+        final_hidden_states = fused_moe(
+            hidden_states,
+            self.w1,
+            self.w2,
+            router_output,
+            self.config.moe_topk,
+            False,
+            inplace=True,
+            custom_routing_function=custom_routing_function,
+        )
+        final_hidden_states = final_hidden_states.view(hidden_states_shape)
+        final_hidden_states = tensor_model_parallel_all_reduce(final_hidden_states)
+        return final_hidden_states
 
 
 class MoELayer(nn.Module):
@@ -588,10 +233,9 @@ class MoELayer(nn.Module):
         lora_config: Optional[LoRAConfig],
     ) -> None:
         super().__init__()
+        self.config = config
 
-        self.router = TopKRouter(config)
-        self.token_dispatcher = TokenDispatcher(config)
-        self.experts = GroupedMLP(config)
+        self.experts = Experts(config)
         self.shared_experts = LlamaMLP(
             config.hidden_size,
             config.moe_intermediate_size * config.moe_num_shared_experts,
@@ -608,27 +252,12 @@ class MoELayer(nn.Module):
 
         Returns:
             torch.Tensor: Output tensor after passing through the MoE layer.
-
-        Process:
-        1. Route tokens to experts using the router.
-        2. Permute tokens based on routing decisions.
-        3. Process tokens through experts.
-        4. Unpermute and combine expert outputs.
-        5. Add shared expert output to the final result.
         """
-        scores, indices, tokens_per_expert = self.router(hidden_states)
-
-        permuted_tokens = self.token_dispatcher.token_permutation(
-            hidden_states, indices
-        )
-
-        expert_output = self.experts(permuted_tokens, tokens_per_expert)
-
-        output = self.token_dispatcher.token_unpermutation(expert_output, scores)
 
         shared_expert_output = self.shared_experts(hidden_states)
-        output += shared_expert_output
-        return output
+        sparse_expert_output = self.experts(hidden_states)
+
+        return sparse_expert_output + shared_expert_output
 
 
 class MoEDecoderLayer(LlamaDecoderLayer):
@@ -1186,6 +815,9 @@ class AriaForConditionalGeneration(nn.Module, SupportsMultiModal):
             ("qkv_proj", "v_proj", "v"),
             ("gate_up_proj", "gate_proj", 0),
             ("gate_up_proj", "up_proj", 1),
+            ("experts.router_weight", "router.weight", "router"),
+            ("experts.w1", "experts.fc1.weight", "w1"),
+            ("experts.w2", "experts.fc2.weight", "w2"),
         ]
         params_dict = dict(self.named_parameters())
         for name, loaded_weight in weights:
