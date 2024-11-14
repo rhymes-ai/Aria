@@ -173,7 +173,7 @@ def generate(
         **sampling_kwargs,
     )
 
-    seq = torch.cat(generated_tokens)
+    seq = torch.cat((seq[T].unsqueeze(0), *generated_tokens))
 
     return seq
 
