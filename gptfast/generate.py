@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
+import random
 import sys
 import time
 from pathlib import Path
@@ -222,21 +223,27 @@ def load_model_and_processor(checkpoint_path, device, precision):
 
 
 def setup_model_compilation(
-    model, compile, compile_prefill, apply_regional_compilation
+    model, compile, compile_prefill, apply_regional_compilation, device
 ):
+    print("Compiling model...")
+    t0 = time.time()
     if apply_regional_compilation:
-        print("Compiling Model")
         for layer in model.llm.layers:
             layer.compile()
 
     if compile:
-        print("Compiling Model")
         global decode_one_token, prefill
         decode_one_token = torch.compile(
             decode_one_token, mode="reduce-overhead", fullgraph=True
         )
         if compile_prefill:
             prefill = torch.compile(prefill, fullgraph=True, dynamic=True)
+
+    # warmup
+    for _ in range(3):
+        input_ids = torch.tensor([1] * random.randint(10, 100), device=device)
+        generate(model, input_ids=torch.tensor([1], device=device), max_new_tokens=5)
+    print(f"Compilation done in {time.time() - t0:.02f} seconds")
 
 
 class GenerationConfig:
@@ -302,6 +309,7 @@ class Generator:
             self.model_config.compile,
             self.model_config.compile_prefill,
             self.model_config.apply_regional_compilation,
+            self.model_config.device,
         )
 
     def generate(

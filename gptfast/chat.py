@@ -48,8 +48,6 @@ class AriaChat:
         """Send a message and get a response."""
         self.add_message("user", message, image_path)
         messages, image = self.format_prompt()
-        print(f"{messages=}")
-        print(f"{image=}")
 
         response = self.generator.generate(messages, image)
 
@@ -75,23 +73,49 @@ if __name__ == "__main__":
 
     model_config = ModelConfig(
         checkpoint_path=Path("checkpoints/rhymes-ai/Aria/model.pth"),
+        compile=True,
     )
     generation_config = GenerationConfig(
-        max_new_tokens=500,
-        top_k=200,
+        max_new_tokens=4096,
+        top_k=40,
         temperature=0.8,
+        cache_size=8192,
     )
 
     chat = AriaChat(model_config, generation_config)
 
-    # Chat without images
-    response = chat.chat("Hello! Who are you?")
-    print(response)
+    # Add welcome message and command instructions
+    print("\n=== AriaChat Terminal Interface ===")
+    print("\nAvailable commands:")
+    print("  'help'    - Show this help message")
+    print("  'quit'    - Exit the chat")
+    print("  'reset'   - Clear chat history")
+    print("  'image'   - Chat with an image")
+    print("\nType your message or command to begin...")
 
-    # Chat with an image
-    image_path = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png"
-    response = chat.chat("Describe the image", image_path)
-    print(response)
+    while True:
+        user_input = input("\n> You: ").strip()
 
-    # Reset the chat
-    chat.reset()
+        if user_input.lower() == "quit":
+            break
+        elif user_input.lower() == "help":
+            print("\nAvailable commands:")
+            print("  'help'    - Show this help message")
+            print("  'quit'    - Exit the chat")
+            print("  'reset'   - Clear chat history")
+            print("  'image'   - Chat with an image")
+            continue
+        elif user_input.lower() == "reset":
+            chat.reset()
+            print("Chat history cleared.")
+            continue
+        elif user_input.lower() == "image":
+            image_path = input("Enter image path or URL: ").strip()
+            message = input("Enter your message about the image: ").strip()
+            response = chat.chat(message, image_path)
+        else:
+            response = chat.chat(user_input)
+
+        print(f"\n> Aria: {response}")
+
+    print("\nGoodbye!")
