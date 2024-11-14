@@ -13,7 +13,7 @@ import torch._inductor.config
 from model import Aria, ModelArgs, Transformer, prepare_inputs_for_model
 from PIL import Image
 from torch.nn.attention import SDPBackend
-from transformers import AutoProcessor, AutoTokenizer
+from transformers import AutoProcessor
 
 
 def device_sync(device):
@@ -220,6 +220,7 @@ def load_model_and_processor(checkpoint_path, device, precision):
 
     return model, processor
 
+
 def setup_model_compilation(
     model, compile, compile_prefill, apply_regional_compilation
 ):
@@ -303,13 +304,17 @@ class Generator:
             self.model_config.apply_regional_compilation,
         )
 
-    def generate(self, messages: list[dict], image: Optional[Image.Image] = None) -> str:
+    def generate(
+        self, messages: list[dict], image: Optional[Image.Image] = None
+    ) -> str:
         text = self.processor.apply_chat_template(messages, add_generation_prompt=True)
         inputs = self.processor(text=text, images=image, return_tensors="pt")
         del inputs["attention_mask"]
         for k, v in inputs.items():
             if k == "pixel_values":
-                inputs[k] = v.to(self.model_config.precision).to(self.model_config.device)
+                inputs[k] = v.to(self.model_config.precision).to(
+                    self.model_config.device
+                )
             else:
                 inputs[k] = v.to(self.model_config.device)
 
@@ -353,7 +358,10 @@ if __name__ == "__main__":
     messages = [
         {
             "role": "user",
-            "content": [{"text": None, "type": "image"}, {"text": "describe the image", "type": "text"}],
+            "content": [
+                {"text": None, "type": "image"},
+                {"text": "describe the image", "type": "text"},
+            ],
         },
     ]
     print(generator.generate(messages, image))

@@ -1,12 +1,16 @@
-from typing import List, Dict, Optional
-from generate import Generator, ModelConfig, GenerationConfig
-from PIL import Image
+from typing import List, Optional
+
 import requests
+from generate import GenerationConfig, Generator, ModelConfig
+from PIL import Image
+
+
 class ChatMessage:
     def __init__(self, role: str, content: str, image_path: Optional[str] = None):
         self.role = role
         self.content = content
         self.image_path = image_path
+
 
 class AriaChat:
     def __init__(self, model_config: ModelConfig, generation_config: GenerationConfig):
@@ -28,7 +32,7 @@ class AriaChat:
                 images.append(msg.image_path)
             content.append({"text": msg.content, "type": "text"})
             messages.append({"role": msg.role, "content": content})
-        
+
         processed_images = []
         for image in images:
             if isinstance(image, str):
@@ -46,15 +50,15 @@ class AriaChat:
         messages, image = self.format_prompt()
         print(f"{messages=}")
         print(f"{image=}")
-        
+
         response = self.generator.generate(messages, image)
-        
+
         # Extract the assistant's response from the full generated text
         assistant_message = response.split("<|assistant|>")[-1].strip()
         # Remove the end token if present
         for stop_string in self.generator.generation_config.stop_strings:
             assistant_message = assistant_message.replace(stop_string, "").strip()
-        
+
         self.add_message("assistant", assistant_message)
         return assistant_message
 
@@ -65,8 +69,9 @@ class AriaChat:
 
 if __name__ == "__main__":
     from pathlib import Path
-    from gptfast.generate import ModelConfig, GenerationConfig
+
     from gptfast.chat import AriaChat
+    from gptfast.generate import GenerationConfig, ModelConfig
 
     model_config = ModelConfig(
         checkpoint_path=Path("checkpoints/rhymes-ai/Aria/model.pth"),
