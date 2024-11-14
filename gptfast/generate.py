@@ -1,11 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
-import contextlib
-import itertools
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
 import sys
 import time
 from pathlib import Path
@@ -19,38 +14,6 @@ from model import Aria, ModelArgs, Transformer
 from PIL import Image
 from torch.nn.attention import SDPBackend
 from transformers import AutoProcessor, AutoTokenizer
-
-
-def get_model_size_in_bytes(model, ignore_embeddings=False):
-    """
-    Returns the model size in bytes. The option to ignore embeddings
-    is useful for models with disproportionately large embeddings compared
-    to other model parameters that get quantized/sparsified.
-    """
-
-    def flat_size(tensor):
-        if hasattr(tensor, "__tensor_flatten__"):
-            size = 0
-            # 0th element is a list of attributes that
-            # hold tensors
-            for attr_name in tensor.__tensor_flatten__()[0]:
-                sub_tensor = getattr(tensor, attr_name)
-                size += flat_size(sub_tensor)
-            return size
-        else:
-            return tensor.numel() * tensor.element_size()
-
-    model_size = 0
-    for name, child in model.named_children():
-        if not (isinstance(child, torch.nn.Embedding) and ignore_embeddings):
-            for p in itertools.chain(
-                child.parameters(recurse=False), child.buffers(recurse=False)
-            ):
-                model_size += flat_size(p)
-            model_size += get_model_size_in_bytes(child, ignore_embeddings)
-    return model_size
-
-
 from model import ModelArgs
 
 
@@ -332,258 +295,101 @@ def setup_model_compilation(
             prefill = torch.compile(prefill, fullgraph=True, dynamic=True)
 
 
-def process_generation(
-    model,
-    inputs,
-    tokenizer,
-    i,
-    num_samples,
-    profile,
-    device,
-    stop_strings=None,
-    **generation_kwargs,
-):
-    t0 = time.perf_counter()
+class GenerationConfig:
+    """Configuration class for text generation parameters."""
+    def __init__(
+        self,
+        max_new_tokens: int = 100,
+        top_k: int = 200,
+        temperature: float = 0.8,
+        cache_size: Optional[int] = None,
+        linear_causal_mask: bool = False,
+        stop_strings: Optional[list[str]] = None
+    ):
+        self.max_new_tokens = max_new_tokens
+        self.top_k = top_k
+        self.temperature = temperature
+        self.cache_size = cache_size
+        self.linear_causal_mask = linear_causal_mask
+        self.stop_strings = stop_strings or ["<|im_end|>"]
 
-    # Encode stop strings once at the start
-    stop_sequences = None
-    if stop_strings:
-        stop_sequences = [
-            torch.tensor(tokenizer.encode(stop), dtype=torch.int, device=device)
-            for stop in stop_strings
-        ]
+class ModelConfig:
+    """Configuration class for model loading and compilation settings."""
+    def __init__(
+        self,
+        checkpoint_path: Path,
+        device: str = default_device,
+        precision: torch.dtype = torch.bfloat16,
+        compile: bool = False,
+        compile_prefill: bool = False,
+        apply_regional_compilation: bool = False
+    ):
+        self.checkpoint_path = checkpoint_path
+        self.device = device
+        self.precision = precision
+        self.compile = compile
+        self.compile_prefill = compile_prefill
+        self.apply_regional_compilation = apply_regional_compilation
 
-    prof = (
-        torch.profiler.profile(with_stack=True)
-        if i == num_samples - 1 and profile
-        else contextlib.nullcontext()
-    )
+class Generator:
+    """Main class for handling text generation."""
+    def __init__(
+        self,
+        model_config: ModelConfig,
+        generation_config: GenerationConfig
+    ):
+        self.model_config = model_config
+        self.generation_config = generation_config
+        self.model = None
+        self.tokenizer = None
+        self.processor = None
+        
+        self._setup_model()
 
-    with prof:
-
-        def callback(new_tokens):
-            if stop_sequences:
-                generated = torch.cat(new_tokens)
-                return any(
-                    generated.size(0) >= stop_seq.size(0)
-                    and torch.equal(generated[-stop_seq.size(0) :], stop_seq)
-                    for stop_seq in stop_sequences
-                )
-            return False
-
-        output = generate(model, **inputs, callback=callback, **generation_kwargs)
-
-    if i == -1:
-        print(f"Compilation time: {time.perf_counter() - t0:.2f} seconds")
-        return None
-
-    if hasattr(prof, "export_chrome_trace"):
-        prof.export_chrome_trace(f"{profile}.json")
-
-    device_sync(device=device)
-    generation_time = time.perf_counter() - t0
-
-    print(tokenizer.decode(output))
-    return output, generation_time
-
-
-def print_metrics(tokens_per_sec, model_size):
-    print("==========")
-    tokpersec = torch.mean(torch.tensor(tokens_per_sec)).item()
-    bandwidth = model_size * tokpersec
-    mem = torch.cuda.max_memory_reserved() / 1e9
-    print(f"Average tokens/sec: {tokpersec:.2f}")
-    print(f"Average Bandwidth: {bandwidth:.02f} GB/s")
-    print(f"Peak Memory Usage: {mem:.02f} GB")
-    print(f"Model Size: {model_size:.02f} GB")
-
-
-def main(
-    checkpoint_path,
-    prompt: str = "Hello, my name is",
-    image_path: str = None,
-    num_samples: int = 5,
-    max_new_tokens: int = 100,
-    top_k: int = 200,
-    temperature: float = 0.8,
-    cache_size: Optional[int] = None,
-    linear_causal_mask: bool = False,
-    compile: bool = True,
-    compile_prefill: bool = False,
-    apply_regional_compilation: bool = False,
-    profile: Optional[Path] = None,
-    memory_profile: Optional[Path] = None,
-    device=default_device,
-    precision=torch.bfloat16,
-    stop_strings: Optional[list] = None,
-) -> None:
-    recommended_inductor_config_setter()
-    assert checkpoint_path.is_file(), checkpoint_path
-
-    model, tokenizer, processor = load_model_and_tokenizer(
-        checkpoint_path, device, precision
-    )
-
-    inputs = (
-        prepare_image_inputs(image_path, prompt, processor, precision)
-        if image_path
-        else prepare_text_inputs(prompt, tokenizer)
-    )
-    inputs = {k: v.to(device) if v is not None else v for k, v in inputs.items()}
-
-    prompt_length = inputs["input_ids"].size(1)
-    torch.manual_seed(1234)
-    model_size = get_model_size_in_bytes(model, ignore_embeddings=True) / 1e9
-
-    setup_model_compilation(model, compile, compile_prefill, apply_regional_compilation)
-
-    if memory_profile:
-        torch.cuda.memory._record_memory_history(
-            True, trace_alloc_max_entries=250000, trace_alloc_record_context=True
+    def _setup_model(self):
+        """Initialize model, tokenizer and processor."""
+        self.model, self.tokenizer, self.processor = load_model_and_tokenizer(
+            self.model_config.checkpoint_path,
+            self.model_config.device,
+            self.model_config.precision
+        )
+        setup_model_compilation(
+            self.model,
+            self.model_config.compile,
+            self.model_config.compile_prefill,
+            self.model_config.apply_regional_compilation
         )
 
-    tokens_per_sec = []
-    start = -1 if compile or apply_regional_compilation else 0
-
-    generation_kwargs = {
-        "max_new_tokens": max_new_tokens,
-        "temperature": temperature,
-        "top_k": top_k,
-        "cache_size": cache_size,
-        "linear_causal_mask": linear_causal_mask,
-        "stop_strings": stop_strings,
-    }
-
-    for i in range(start, num_samples):
-        if i == 0:
-            torch.cuda.reset_peak_memory_stats()
-        device_sync(device=device)
-
-        result = process_generation(
-            model,
-            inputs,
-            tokenizer,
-            i,
-            num_samples,
-            profile,
-            device,
-            **generation_kwargs,
+    def generate(self, prompt: str, image_path: Optional[str] = None) -> str:
+        """Generate text from prompt and optional image."""
+        inputs = (
+            prepare_image_inputs(image_path, prompt, self.processor, self.model_config.precision)
+            if image_path
+            else prepare_text_inputs(prompt, self.tokenizer)
         )
-        if result is None:
-            continue
+        inputs = {k: v.to(self.model_config.device) if v is not None else v for k, v in inputs.items()}
 
-        output, generation_time = result
-        tokens_generated = output.size(0) - prompt_length
-        print(f"Tokens generated: {tokens_generated}")
-        tokens_sec = tokens_generated / generation_time
-        tokens_per_sec.append(tokens_sec)
-
-        print(
-            f"Time for inference {i + 1}: {generation_time:.02f} sec total, {tokens_sec:.02f} tokens/sec"
+        output = generate(
+            self.model,
+            **inputs,
+            max_new_tokens=self.generation_config.max_new_tokens,
+            temperature=self.generation_config.temperature,
+            top_k=self.generation_config.top_k,
+            cache_size=self.generation_config.cache_size,
+            linear_causal_mask=self.generation_config.linear_causal_mask,
         )
-        print(f"Bandwidth achieved: {model_size * tokens_sec:.02f} GB/s")
-
-        if memory_profile and i == 0:
-            snapshot = torch.cuda.memory._snapshot()
-            with open(f"{memory_profile}.pickle", "wb") as f:
-                from pickle import dump
-
-                dump(snapshot, f)
-            print(
-                f"\nmemory profile {memory_profile}.pickle saved, to convert that to a usable file, use",
-                "python pytorch/torch/cuda/_memory_viz.py trace_plot <pickle file> -o <desired output name>.html",
-            )
-            break
-
-    print_metrics(tokens_per_sec, model_size)
+        
+        return self.tokenizer.decode(output)
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Your CLI description.")
-    parser.add_argument(
-        "checkpoint_path",
-        type=Path,
-        help="Model checkpoint path.",
+    model_config = ModelConfig(
+        checkpoint_path=Path("checkpoints/rhymes-ai/Aria/model.pth"),
     )
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        default="Explain what is the meaning of life",
-        help="Input prompt.",
+    generation_config = GenerationConfig(
+        max_new_tokens=100,
+        top_k=200,
+        temperature=0.8,
     )
-    parser.add_argument("--image_path", type=str, default=None, help="Image path.")
-    parser.add_argument("--num_samples", type=int, default=5, help="Number of samples.")
-    parser.add_argument(
-        "--max_new_tokens", type=int, default=200, help="Maximum number of new tokens."
-    )
-    parser.add_argument("--top_k", type=int, default=200, help="Top-k for sampling.")
-    parser.add_argument(
-        "--temperature", type=float, default=0.8, help="Temperature for sampling."
-    )
-    parser.add_argument(
-        "--cache_size",
-        type=int,
-        default=None,
-        help="Force size of cache to be a certain number of tokens, if not set, will use max_new_tokens+prompt_size",
-    )
-    parser.add_argument(
-        "--linear_causal_mask",
-        action="store_true",
-        help="Whether to use the memory efficient, but slightly less fast, linear causal mask (important for long context lengths)",
-    )
-    parser.add_argument(
-        "--compile", action="store_true", help="Whether to compile the model."
-    )
-    parser.add_argument(
-        "--compile_prefill",
-        action="store_true",
-        help="Whether to compile the prefill (improves prefill perf, but higher compile times)",
-    )
-    parser.add_argument(
-        "--apply_regional_compilation",
-        action="store_true",
-        help="Whether to apply regional compilation to the layers of the model",
-    )
-    parser.add_argument("--profile", type=Path, default=None, help="Profile path.")
-    parser.add_argument(
-        "--memory_profile", type=Path, default=None, help="filename for memory profile."
-    )
-    parser.add_argument(
-        "--device", type=str, default=default_device, help="Device to use"
-    )
-    parser.add_argument(
-        "--precision",
-        type=lambda x: getattr(torch, x.split(".")[-1]),
-        default=torch.bfloat16,
-        help="dtype precision to use",
-    )
-    parser.add_argument(
-        "--stop_strings",
-        type=str,
-        nargs="+",
-        default=["<|im_end|>"],
-        help="List of strings that will stop generation when encountered at the end",
-    )
-
-    args = parser.parse_args()
-    main(
-        args.checkpoint_path,
-        args.prompt,
-        args.image_path,
-        args.num_samples,
-        args.max_new_tokens,
-        args.top_k,
-        args.temperature,
-        args.cache_size,
-        args.linear_causal_mask,
-        args.compile,
-        args.compile_prefill,
-        args.apply_regional_compilation,
-        args.profile,
-        args.memory_profile,
-        args.device,
-        args.precision,
-        args.stop_strings,
-    )
+    generator = Generator(model_config, generation_config)
+    print(generator.generate("Hello, world!"))
