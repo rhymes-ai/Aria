@@ -307,9 +307,11 @@ class Generator:
         text = self.processor.apply_chat_template(messages, add_generation_prompt=True)
         inputs = self.processor(text=text, images=image, return_tensors="pt")
         del inputs["attention_mask"]
-        inputs["pixel_values"] = inputs["pixel_values"].to(self.model_config.precision)
         for k, v in inputs.items():
-            inputs[k] = v.to(self.model_config.device)
+            if k == "pixel_values":
+                inputs[k] = v.to(self.model_config.precision).to(self.model_config.device)
+            else:
+                inputs[k] = v.to(self.model_config.device)
 
         def early_stop_generation(tokens):
             # This is not efficient, but it works
