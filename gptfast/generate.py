@@ -10,11 +10,10 @@ import requests
 import torch
 import torch._dynamo.config
 import torch._inductor.config
-from model import Aria, ModelArgs, Transformer
+from model import Aria, ModelArgs, Transformer, prepare_inputs_for_model
 from PIL import Image
 from torch.nn.attention import SDPBackend
 from transformers import AutoProcessor, AutoTokenizer
-from model import ModelArgs, prepare_inputs_for_model
 
 
 def device_sync(device):
@@ -142,8 +141,15 @@ def generate(
     with torch.device(device):
         if cache_size is None:
             cache_size = max_seq_length
-        assert cache_size >= max_seq_length, "need cache_size to be greater than max_new_tokens + size-of-prompt"
-        model.setup_caches(max_batch_size=1, max_seq_length=cache_size, linear_causal_mask=linear_causal_mask, prompt_length=T)
+        assert (
+            cache_size >= max_seq_length
+        ), "need cache_size to be greater than max_new_tokens + size-of-prompt"
+        model.setup_caches(
+            max_batch_size=1,
+            max_seq_length=cache_size,
+            linear_causal_mask=linear_causal_mask,
+            prompt_length=T,
+        )
 
     # format model input
     x, input_pos = prepare_inputs_for_model(input_ids, max_new_tokens)
@@ -157,11 +163,19 @@ def generate(
     seq[T] = next_token
     # execute token generation
     input_pos = torch.tensor([T], device=device, dtype=torch.int)
-    generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, new_tokens-1, callback=callback, **sampling_kwargs)
+    generated_tokens, _ = decode_n_tokens(
+        model,
+        next_token.view(1, -1),
+        input_pos,
+        new_tokens - 1,
+        callback=callback,
+        **sampling_kwargs,
+    )
 
-    seq = torch.cat((seq[:T+1], *generated_tokens))
+    seq = torch.cat((seq[: T + 1], *generated_tokens))
 
     return seq
+
 
 def encode_tokens(tokenizer, string, bos=True, device=default_device):
     tokens = tokenizer.encode(string)
@@ -266,6 +280,7 @@ def setup_model_compilation(
 
 class GenerationConfig:
     """Configuration class for text generation parameters."""
+
     def __init__(
         self,
         max_new_tokens: int = 100,
@@ -273,7 +288,7 @@ class GenerationConfig:
         temperature: float = 0.8,
         cache_size: Optional[int] = None,
         linear_causal_mask: bool = False,
-        stop_strings: Optional[list[str]] = None
+        stop_strings: Optional[list[str]] = None,
     ):
         self.max_new_tokens = max_new_tokens
         self.top_k = top_k
@@ -282,8 +297,10 @@ class GenerationConfig:
         self.linear_causal_mask = linear_causal_mask
         self.stop_strings = stop_strings or ["<|im_end|>"]
 
+
 class ModelConfig:
     """Configuration class for model loading and compilation settings."""
+
     def __init__(
         self,
         checkpoint_path: Path,
@@ -291,7 +308,7 @@ class ModelConfig:
         precision: torch.dtype = torch.bfloat16,
         compile: bool = False,
         compile_prefill: bool = False,
-        apply_regional_compilation: bool = False
+        apply_regional_compilation: bool = False,
     ):
         self.checkpoint_path = checkpoint_path
         self.device = device
@@ -300,19 +317,17 @@ class ModelConfig:
         self.compile_prefill = compile_prefill
         self.apply_regional_compilation = apply_regional_compilation
 
+
 class Generator:
     """Main class for handling text generation."""
-    def __init__(
-        self,
-        model_config: ModelConfig,
-        generation_config: GenerationConfig
-    ):
+
+    def __init__(self, model_config: ModelConfig, generation_config: GenerationConfig):
         self.model_config = model_config
         self.generation_config = generation_config
         self.model = None
         self.tokenizer = None
         self.processor = None
-        
+
         self._setup_model()
 
     def _setup_model(self):
@@ -320,23 +335,28 @@ class Generator:
         self.model, self.tokenizer, self.processor = load_model_and_tokenizer(
             self.model_config.checkpoint_path,
             self.model_config.device,
-            self.model_config.precision
+            self.model_config.precision,
         )
         setup_model_compilation(
             self.model,
             self.model_config.compile,
             self.model_config.compile_prefill,
-            self.model_config.apply_regional_compilation
+            self.model_config.apply_regional_compilation,
         )
 
     def generate(self, prompt: str, image_path: Optional[str] = None) -> str:
         """Generate text from prompt and optional image."""
         inputs = (
-            prepare_image_inputs(image_path, prompt, self.processor, self.model_config.precision)
+            prepare_image_inputs(
+                image_path, prompt, self.processor, self.model_config.precision
+            )
             if image_path
             else prepare_text_inputs(prompt, self.tokenizer)
         )
-        inputs = {k: v.to(self.model_config.device) if v is not None else v for k, v in inputs.items()}
+        inputs = {
+            k: v.to(self.model_config.device) if v is not None else v
+            for k, v in inputs.items()
+        }
 
         def early_stop_generation(tokens):
             # This is not efficient, but it works
@@ -356,9 +376,9 @@ class Generator:
             top_k=self.generation_config.top_k,
             cache_size=self.generation_config.cache_size,
             linear_causal_mask=self.generation_config.linear_causal_mask,
-            callback=early_stop_generation
+            callback=early_stop_generation,
         )
-        
+
         return self.tokenizer.decode(output)
 
 
