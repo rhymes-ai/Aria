@@ -642,10 +642,27 @@ class Aria(nn.Module):
         )
 
         inputs_embeds = self.llm.tok_embeddings(idx)
-        x = self._merge_input_ids_with_image_features(
-            image_features, inputs_embeds, idx
+
+        n_image_tokens = (idx == self.config.image_token_index).sum().item()
+        n_image_features = image_features.shape[0] * image_features.shape[1]
+
+        if n_image_tokens != n_image_features:
+            raise ValueError(
+                f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
+            )
+        special_image_mask = (
+            (idx == self.config.image_token_index)
+            .unsqueeze(-1)
+            .expand_as(inputs_embeds)
+            .to(inputs_embeds.device)
         )
-        return x
+        image_features = image_features.to(
+            inputs_embeds.device, inputs_embeds.dtype
+        )
+        inputs_embeds = inputs_embeds.masked_scatter(
+            special_image_mask, image_features
+        )
+        return inputs_embeds
 
     def forward(
         self,

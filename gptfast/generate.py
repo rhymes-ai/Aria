@@ -14,7 +14,7 @@ from model import Aria, ModelArgs, Transformer
 from PIL import Image
 from torch.nn.attention import SDPBackend
 from transformers import AutoProcessor, AutoTokenizer
-from model import ModelArgs
+from model import ModelArgs, prepare_inputs_for_model
 
 
 def device_sync(device):
@@ -128,71 +128,40 @@ def generate(
 
     # create an empty tensor of the expected final shape and fill in the current tokens
     device = input_ids.device
-    original_prompt_token_count = input_ids.numel()
-
-    if pixel_values is not None:
-        input_embeds = model.prepare_embeddings(input_ids, pixel_values, pixel_mask)
-        prompt_token_count_after_inserting_image_tokens = input_embeds.shape[1]
-    else:
-        input_embeds = None
-        prompt_token_count_after_inserting_image_tokens = input_ids.numel()
+    T = input_ids.numel()
 
     # calculate how many tokens to generate based on max_new_tokens and model's upper bound (block_size)
-    max_seq_length = min(
-        prompt_token_count_after_inserting_image_tokens + max_new_tokens,
-        model.config.block_size,
-    )
-    new_tokens = max_seq_length - prompt_token_count_after_inserting_image_tokens
+    max_seq_length = min(T + max_new_tokens, model.config.block_size)
+    new_tokens = max_seq_length - T
 
     # full prompt+output will be stored in seq
     seq = torch.empty(max_seq_length, dtype=input_ids.dtype, device=device)
-    seq[:original_prompt_token_count] = input_ids.view(-1)
+    seq[:T] = input_ids.view(-1)
 
     # setup model caches
     with torch.device(device):
         if cache_size is None:
             cache_size = max_seq_length
-        assert (
-            cache_size >= max_seq_length
-        ), "need cache_size to be greater than max_new_tokens + size-of-prompt"
-        model.setup_caches(
-            max_batch_size=1,
-            max_seq_length=cache_size,
-            linear_causal_mask=linear_causal_mask,
-            prompt_length=prompt_token_count_after_inserting_image_tokens,
-        )
+        assert cache_size >= max_seq_length, "need cache_size to be greater than max_new_tokens + size-of-prompt"
+        model.setup_caches(max_batch_size=1, max_seq_length=cache_size, linear_causal_mask=linear_causal_mask, prompt_length=T)
 
-    input_pos = torch.arange(
-        0,
-        prompt_token_count_after_inserting_image_tokens,
-        device=device,
-        dtype=torch.int,
-    )
+    # format model input
+    x, input_pos = prepare_inputs_for_model(input_ids, max_new_tokens)
+    if pixel_values is not None:
+        input_embeds = model.prepare_embeddings(x, pixel_values, pixel_mask)
+    else:
+        input_embeds = None
 
     # execute prefill
-    next_token = prefill(
-        model, input_ids, input_pos, input_embeds, **sampling_kwargs
-    ).clone()
-    seq[original_prompt_token_count] = next_token
-    input_pos = torch.tensor(
-        [prompt_token_count_after_inserting_image_tokens],
-        device=device,
-        dtype=torch.int,
-    )
+    next_token = prefill(model, x, input_pos, input_embeds, **sampling_kwargs).clone()
+    seq[T] = next_token
     # execute token generation
-    generated_tokens, _ = decode_n_tokens(
-        model,
-        next_token.view(1, -1),
-        input_pos,
-        new_tokens - 1,
-        callback=callback,
-        **sampling_kwargs,
-    )
+    input_pos = torch.tensor([T], device=device, dtype=torch.int)
+    generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, new_tokens-1, callback=callback, **sampling_kwargs)
 
-    seq = torch.cat((seq[: original_prompt_token_count + 1], *generated_tokens))
+    seq = torch.cat((seq[:T+1], *generated_tokens))
 
     return seq
-
 
 def encode_tokens(tokenizer, string, bos=True, device=default_device):
     tokens = tokenizer.encode(string)
@@ -398,9 +367,11 @@ if __name__ == "__main__":
         checkpoint_path=Path("checkpoints/rhymes-ai/Aria/model.pth"),
     )
     generation_config = GenerationConfig(
-        max_new_tokens=100,
+        max_new_tokens=500,
         top_k=200,
         temperature=0.8,
     )
     generator = Generator(model_config, generation_config)
-    print(generator.generate("Hello, world!"))
+
+    image_path = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png"
+    print(generator.generate("describe the image", image_path))
