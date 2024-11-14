@@ -172,7 +172,7 @@ def generate(
         **sampling_kwargs,
     )
 
-    seq = torch.cat((seq[: T + 1], *generated_tokens))
+    seq = torch.cat(generated_tokens)
 
     return seq
 
@@ -206,7 +206,7 @@ def recommended_inductor_config_setter():
     torch.set_float32_matmul_precision("high")
 
 
-def load_model_and_tokenizer(checkpoint_path, device, precision):
+def load_model_and_processor(checkpoint_path, device, precision):
     print(f"Using device={device}")
     print("Loading model ...")
     t0 = time.time()
@@ -216,49 +216,9 @@ def load_model_and_tokenizer(checkpoint_path, device, precision):
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
     tokenizer_path = checkpoint_path.parent
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path, use_fast=False, trust_remote_code=True
-    )
     processor = AutoProcessor.from_pretrained(tokenizer_path, trust_remote_code=True)
 
-    return model, tokenizer, processor
-
-
-def prepare_image_inputs(image_path, prompt, processor, precision):
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"text": None, "type": "image"},
-                {"text": prompt, "type": "text"},
-            ],
-        }
-    ]
-
-    image = Image.open(
-        requests.get(image_path, stream=True).raw
-        if image_path.startswith(("http://", "https://"))
-        else image_path
-    )
-
-    text = processor.apply_chat_template(messages, add_generation_prompt=True)
-    inputs = processor(text=text, images=image, return_tensors="pt")
-    del inputs["attention_mask"]
-    inputs["pixel_values"] = inputs["pixel_values"].to(precision)
-    return inputs
-
-
-def prepare_text_inputs(prompt, tokenizer):
-    messages = [{"role": "user", "content": [{"text": prompt, "type": "text"}]}]
-    text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
-    return {
-        "input_ids": tokenizer(text, return_tensors="pt").input_ids.to(torch.int32),
-        "pixel_values": None,
-        "pixel_mask": None,
-    }
-
+    return model, processor
 
 def setup_model_compilation(
     model, compile, compile_prefill, apply_regional_compilation
@@ -325,14 +285,13 @@ class Generator:
         self.model_config = model_config
         self.generation_config = generation_config
         self.model = None
-        self.tokenizer = None
         self.processor = None
 
         self._setup_model()
 
     def _setup_model(self):
         """Initialize model, tokenizer and processor."""
-        self.model, self.tokenizer, self.processor = load_model_and_tokenizer(
+        self.model, self.processor = load_model_and_processor(
             self.model_config.checkpoint_path,
             self.model_config.device,
             self.model_config.precision,
@@ -344,26 +303,20 @@ class Generator:
             self.model_config.apply_regional_compilation,
         )
 
-    def generate(self, prompt: str, image_path: Optional[str] = None) -> str:
-        """Generate text from prompt and optional image."""
-        inputs = (
-            prepare_image_inputs(
-                image_path, prompt, self.processor, self.model_config.precision
-            )
-            if image_path
-            else prepare_text_inputs(prompt, self.tokenizer)
-        )
-        inputs = {
-            k: v.to(self.model_config.device) if v is not None else v
-            for k, v in inputs.items()
-        }
+    def generate(self, messages: list[dict], image: Optional[Image.Image] = None) -> str:
+        text = self.processor.apply_chat_template(messages, add_generation_prompt=True)
+        inputs = self.processor(text=text, images=image, return_tensors="pt")
+        del inputs["attention_mask"]
+        inputs["pixel_values"] = inputs["pixel_values"].to(self.model_config.precision)
+        for k, v in inputs.items():
+            inputs[k] = v.to(self.model_config.device)
 
         def early_stop_generation(tokens):
             # This is not efficient, but it works
             for stop_string in self.generation_config.stop_strings:
 
                 token_list = torch.cat(tokens)
-                decoded_string = self.tokenizer.decode(token_list)
+                decoded_string = self.processor.tokenizer.decode(token_list)
                 if decoded_string.endswith(stop_string):
                     return True
             return False
@@ -379,7 +332,7 @@ class Generator:
             callback=early_stop_generation,
         )
 
-        return self.tokenizer.decode(output)
+        return self.processor.tokenizer.decode(output)
 
 
 if __name__ == "__main__":
@@ -394,4 +347,11 @@ if __name__ == "__main__":
     generator = Generator(model_config, generation_config)
 
     image_path = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png"
-    print(generator.generate("describe the image", image_path))
+    image = Image.open(requests.get(image_path, stream=True).raw)
+    messages = [
+        {
+            "role": "user",
+            "content": [{"text": None, "type": "image"}, {"text": "describe the image", "type": "text"}],
+        },
+    ]
+    print(generator.generate(messages, image))
