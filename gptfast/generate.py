@@ -369,6 +369,16 @@ class Generator:
         )
         inputs = {k: v.to(self.model_config.device) if v is not None else v for k, v in inputs.items()}
 
+        def early_stop_generation(tokens):
+            # This is not efficient, but it works
+            for stop_string in self.generation_config.stop_strings:
+
+                token_list = torch.cat(tokens)
+                decoded_string = self.tokenizer.decode(token_list)
+                if decoded_string.endswith(stop_string):
+                    return True
+            return False
+
         output = generate(
             self.model,
             **inputs,
@@ -377,6 +387,7 @@ class Generator:
             top_k=self.generation_config.top_k,
             cache_size=self.generation_config.cache_size,
             linear_causal_mask=self.generation_config.linear_causal_mask,
+            callback=early_stop_generation
         )
         
         return self.tokenizer.decode(output)
