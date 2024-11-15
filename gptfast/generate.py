@@ -1,7 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
-import random
 import sys
 import time
 from pathlib import Path
@@ -225,8 +224,7 @@ def load_model_and_processor(checkpoint_path, device, precision):
 def setup_model_compilation(
     model, compile, compile_prefill, apply_regional_compilation, device
 ):
-    print("Compiling model...")
-    t0 = time.time()
+    recommended_inductor_config_setter()
     if apply_regional_compilation:
         for layer in model.llm.layers:
             layer.compile()
@@ -238,12 +236,6 @@ def setup_model_compilation(
         )
         if compile_prefill:
             prefill = torch.compile(prefill, fullgraph=True, dynamic=True)
-
-    # warmup
-    for _ in range(3):
-        input_ids = torch.tensor([1] * random.randint(10, 100), device=device)
-        generate(model, input_ids=torch.tensor([1], device=device), max_new_tokens=5)
-    print(f"Compilation done in {time.time() - t0:.02f} seconds")
 
 
 class GenerationConfig:
@@ -263,7 +255,7 @@ class GenerationConfig:
         self.temperature = temperature
         self.cache_size = cache_size
         self.linear_causal_mask = linear_causal_mask
-        self.stop_strings = stop_strings or ["<|im_end|>"]
+        self.stop_strings = stop_strings
 
 
 class ModelConfig:
@@ -313,7 +305,10 @@ class Generator:
         )
 
     def generate(
-        self, messages: list[dict], image: Optional[Image.Image] = None
+        self,
+        messages: list[dict],
+        image: Optional[Image.Image] = None,
+        detokenize: bool = True,
     ) -> str:
         text = self.processor.apply_chat_template(messages, add_generation_prompt=True)
         inputs = self.processor(text=text, images=image, return_tensors="pt")
@@ -327,6 +322,9 @@ class Generator:
                 inputs[k] = v.to(self.model_config.device)
 
         def early_stop_generation(tokens):
+            if self.generation_config.stop_strings is None:
+                return False
+
             # This is not efficient, but it works
             for stop_string in self.generation_config.stop_strings:
 
@@ -347,7 +345,10 @@ class Generator:
             callback=early_stop_generation,
         )
 
-        return self.processor.tokenizer.decode(output)
+        if detokenize:
+            return self.processor.tokenizer.decode(output)
+        else:
+            return output
 
 
 if __name__ == "__main__":
@@ -355,9 +356,7 @@ if __name__ == "__main__":
         checkpoint_path=Path("checkpoints/rhymes-ai/Aria/model.pth"),
     )
     generation_config = GenerationConfig(
-        max_new_tokens=500,
-        top_k=200,
-        temperature=0.8,
+        max_new_tokens=500, top_k=200, temperature=0.8, stop_strings=["<|im_end|>"]
     )
     generator = Generator(model_config, generation_config)
 

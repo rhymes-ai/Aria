@@ -8,6 +8,19 @@ python scripts/download.py --repo_id $MODEL_REPO
 python scripts/convert_hf_checkpoint.py --checkpoint_dir checkpoints/$MODEL_REPO
 ```
 
+## Benchmark
+
+```bash
+python benchmark.py --compile
+```
+
+### Performance Results (Single H100 GPU)
+
+| Mode    | Performance (tokens/s) |
+|---------|----------------------:|
+| Base    | 25.2                  |
+| Compile | 130.0                 |
+
 ## Chat Interface
 
 ### Running the Chat

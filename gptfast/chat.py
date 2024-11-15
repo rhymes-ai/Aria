@@ -80,6 +80,7 @@ if __name__ == "__main__":
         top_k=40,
         temperature=0.8,
         cache_size=8192,
+        stop_strings=["<|im_end|>"],
     )
 
     chat = AriaChat(model_config, generation_config)
