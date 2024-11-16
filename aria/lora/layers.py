@@ -21,7 +21,6 @@ from typing import Any, Union, Optional
 
 import torch
 from peft.tuners.lora import LoraLayer
-from peft.utils.other import transpose
 from peft.tuners.tuners_utils import check_adapters_to_merge
 from torch import nn
 
