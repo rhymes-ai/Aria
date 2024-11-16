@@ -151,7 +151,9 @@ class GroupedGemmLoraLayer(nn.Module, LoraLayer):
 
         return result
 
-    def merge(self, safe_merge: bool = False, adapter_names: Optional[list[str]] = None) -> None:
+    def merge(
+        self, safe_merge: bool = False, adapter_names: Optional[list[str]] = None
+    ) -> None:
         """
         Merge the active adapter weights into the base weights
 
@@ -173,13 +175,17 @@ class GroupedGemmLoraLayer(nn.Module, LoraLayer):
             if active_adapter in self.lora_A.keys():
                 base_layer = self.get_base_layer()
                 if safe_merge:
-                    raise NotImplementedError("Safe merge is not supported for GroupedGemmLoraLayer, try not using it instead.")
+                    raise NotImplementedError(
+                        "Safe merge is not supported for GroupedGemmLoraLayer, try not using it instead."
+                    )
                 else:
                     delta_weight = self.get_delta_weight(active_adapter)
                     if not self.use_dora[active_adapter]:
                         base_layer.weight.data += delta_weight
                     else:
-                        raise NotImplementedError("Dora is not supported for GroupedGemmLoraLayer, try not using it instead.")
+                        raise NotImplementedError(
+                            "Dora is not supported for GroupedGemmLoraLayer, try not using it instead."
+                        )
 
                 self.merged_adapters.append(active_adapter)
 
