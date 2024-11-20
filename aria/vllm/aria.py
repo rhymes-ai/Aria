@@ -42,9 +42,7 @@ from vllm.model_executor.layers.sampler import Sampler, SamplerOutput, SamplingM
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     DEFAULT_VOCAB_PADDING_SIZE,
     ParallelLMHead,
-    VocabParallelEmbedding,
 )
-from vllm.model_executor.model_loader.weight_utils import default_weight_loader
 from vllm.model_executor.models.interfaces import SupportsMultiModal
 from vllm.model_executor.models.llama import (
     LlamaAttention,
@@ -55,8 +53,11 @@ from vllm.model_executor.models.llama import (
     RMSNorm,
 )
 from vllm.model_executor.models.utils import (
+    AutoWeightsLoader,
     PPMissingLayer,
+    WeightsMapper,
     make_layers,
+    maybe_prefix,
     merge_multimodal_embeddings,
 )
 from vllm.model_executor.utils import set_weight_attrs
@@ -70,8 +71,8 @@ from vllm.multimodal.utils import (
 from vllm.sequence import IntermediateTensors
 from vllm.utils import is_list_of
 
-from .vision_encoder import AriaVisionModel
 from .projector import AriaProjector
+from .vision_encoder import AriaVisionModel
 
 logger = logging.get_logger(__name__)
 
@@ -155,9 +156,37 @@ class Experts(nn.Module):
                 )
             )
         )
-        set_weight_attrs(self.router_weight, {"weight_loader": self.weight_loader})
-        set_weight_attrs(self.w1, {"weight_loader": self.weight_loader})
-        set_weight_attrs(self.w2, {"weight_loader": self.weight_loader})
+        set_weight_attrs(
+            self.router_weight, {"weight_loader": self._weight_loader_for_router}
+        )
+        set_weight_attrs(self.w1, {"weight_loader": self._weight_loader_for_w1})
+        set_weight_attrs(self.w2, {"weight_loader": self._weight_loader_for_w2})
+
+    def _weight_loader_for_router(
+        self, param: nn.Parameter, loaded_weight: torch.Tensor
+    ):
+        param.data.copy_(loaded_weight)
+
+    def _weight_loader_for_w1(self, param: nn.Parameter, loaded_weight: torch.Tensor):
+        # the shape of loaded_weight is (num_experts, hidden_size, 2 * moe_intermediate_size)
+        if self.tp_size > 1:
+            up, gate = loaded_weight.chunk(2, dim=-1)
+            up_current_rank = up.chunk(self.tp_size, dim=-1)[self.tp_rank]
+            gate_current_rank = gate.chunk(self.tp_size, dim=-1)[self.tp_rank]
+            up_and_gate = torch.cat(
+                [up_current_rank, gate_current_rank], dim=-1
+            ).transpose(1, 2)
+            param.data.copy_(up_and_gate)
+        else:
+            param.data.copy_(loaded_weight.transpose(1, 2))
+
+    def _weight_loader_for_w2(self, param: nn.Parameter, loaded_weight: torch.Tensor):
+        # the shape of loaded_weight is (num_experts, moe_intermediate_size, hidden_size)
+        if self.tp_size > 1:
+            down_current_rank = loaded_weight.chunk(self.tp_size, dim=1)[self.tp_rank]
+            param.data.copy_(down_current_rank.transpose(1, 2))
+        else:
+            param.data.copy_(loaded_weight.transpose(1, 2))
 
     def weight_loader(
         self, param: nn.Parameter, loaded_weight: torch.Tensor, shard_id: str
@@ -327,39 +356,18 @@ class AriaMoELMModel(LlamaModel):
         config (LlamaConfig): Configuration object for the model.
     """
 
-    def __init__(
-        self,
-        config: LlamaConfig,
-        cache_config: Optional[CacheConfig] = None,
-        quant_config: Optional[QuantizationConfig] = None,
-        lora_config: Optional[LoRAConfig] = None,
-        prefix: str = "",
-    ) -> None:
-        nn.Module.__init__(self)
+    def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+        super().__init__(vllm_config=vllm_config, prefix=prefix)
+
+        config = vllm_config.model_config.hf_config
+        cache_config = vllm_config.cache_config
+        quant_config = vllm_config.quant_config
 
         # FIXME(zhoufan): this is a hack to avoid the error: AttributeError: 'AriaMoELMModel' object has no attribute 'do_not_compile'.
         self.do_not_compile = True
 
-        self.config = config
-        self.padding_idx = config.pad_token_id
-        lora_vocab = (
-            (lora_config.lora_extra_vocab_size * (lora_config.max_loras or 1))
-            if lora_config
-            else 0
-        )
-        self.vocab_size = config.vocab_size + lora_vocab
-        self.org_vocab_size = config.vocab_size
-        if get_pp_group().is_first_rank or (
-            config.tie_word_embeddings and get_pp_group().is_last_rank
-        ):
-            self.embed_tokens = VocabParallelEmbedding(
-                self.vocab_size,
-                config.hidden_size,
-                org_num_embeddings=config.vocab_size,
-                quant_config=quant_config,
-            )
-        else:
-            self.embed_tokens = PPMissingLayer()
+        self.layers = None
+
         self.start_layer, self.end_layer, self.layers = make_layers(
             config.num_hidden_layers,
             lambda prefix: MoEDecoderLayer(
@@ -370,10 +378,8 @@ class AriaMoELMModel(LlamaModel):
             ),
             prefix=f"{prefix}.layers",
         )
-        if get_pp_group().is_last_rank:
-            self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        else:
-            self.norm = PPMissingLayer()
+
+    # def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
 
 
 class AriaMoELMForCausalLM(LlamaForCausalLM):
@@ -717,7 +723,7 @@ class AriaForConditionalGeneration(nn.Module, SupportsMultiModal):
     ):
         super().__init__()
         config = vllm_config.model_config.hf_config
-        cache_config = vllm_config.cache_config
+        vllm_config.cache_config
         quant_config = vllm_config.quant_config
 
         # prepare the image_size to tokens mapping for the image preprocess, see input_processor
@@ -734,7 +740,8 @@ class AriaForConditionalGeneration(nn.Module, SupportsMultiModal):
         self.multi_modal_projector = build_mm_projector(config)
         self.vocab_size = config.text_config.vocab_size
         self.language_model = AriaMoELMModel(
-            config.text_config, cache_config, quant_config
+            vllm_config=vllm_config.with_hf_config(config.text_config),
+            prefix=maybe_prefix(prefix, "language_model.model"),
         )
         self.pad_token_id = (
             self.config.pad_token_id if self.config.pad_token_id is not None else -1
@@ -812,38 +819,17 @@ class AriaForConditionalGeneration(nn.Module, SupportsMultiModal):
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
-        # only doing this for language model part for now.
-        stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
-            ("qkv_proj", "q_proj", "q"),
-            ("qkv_proj", "k_proj", "k"),
-            ("qkv_proj", "v_proj", "v"),
-            ("gate_up_proj", "gate_proj", 0),
-            ("gate_up_proj", "up_proj", 1),
-            ("experts.router_weight", "router.weight", "router"),
-            ("experts.w1", "experts.fc1.weight", "w1"),
-            ("experts.w2", "experts.fc2.weight", "w2"),
-        ]
-        params_dict = dict(self.named_parameters())
-        for name, loaded_weight in weights:
-            for key_to_modify, new_key in _KEYS_TO_MODIFY_MAPPING.items():
-                if key_to_modify in name:
-                    name = name.replace(key_to_modify, new_key)
-            shard_id = None
-            # Because we used the origin hf vit and vision projector, we cound keep the weight in the sharded shape.
-            # Only for the language model part needs to adjust the weight loading.
-            if "language_model" in name or "vision_tower" in name:
-                for param_name, weight_name, _shard_id in stacked_params_mapping:
-                    if weight_name not in name:
-                        continue
-                    name = name.replace(weight_name, param_name)
-                    shard_id = _shard_id
-                    break
-            
+        hf_to_vllm_mapper = WeightsMapper(
+            orig_to_new_prefix={
+                "language_model.model": "language_model",
+                "language_model.lm_head": "lm_head",
+            },
+            orig_to_new_suffix={
+                "experts.fc1.weight": "experts.w1",
+                "experts.fc2.weight": "experts.w2",
+                "router.weight": "experts.router_weight",
+            },
+        )
 
-            param = params_dict[name]
-            weight_loader = getattr(param, "weight_loader", default_weight_loader)
-            if shard_id is not None:
-                weight_loader(param, loaded_weight, shard_id)
-            else:
-                weight_loader(param, loaded_weight)
+        loader = AutoWeightsLoader(self)
+        loader.load_weights(weights, mapper=hf_to_vllm_mapper)
