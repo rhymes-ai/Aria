@@ -583,7 +583,6 @@ class AriaForConditionalGeneration(nn.Module, SupportsMultiModal):
     ):
         super().__init__()
         config = vllm_config.model_config.hf_config
-        vllm_config.cache_config
         quant_config = vllm_config.quant_config
 
         # prepare the image_size to tokens mapping for the image preprocess, see input_processor
