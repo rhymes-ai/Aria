@@ -28,7 +28,6 @@ from transformers.utils import logging
 from vllm.attention import AttentionMetadata
 from vllm.config import CacheConfig, LoRAConfig, VllmConfig
 from vllm.distributed import (
-    get_pp_group,
     get_tensor_model_parallel_rank,
     get_tensor_model_parallel_world_size,
     tensor_model_parallel_all_reduce,
@@ -39,22 +38,17 @@ from vllm.model_executor.layers.layernorm import RMSNorm
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
 from vllm.model_executor.layers.sampler import Sampler, SamplerOutput, SamplingMetadata
-from vllm.model_executor.layers.vocab_parallel_embedding import (
-    DEFAULT_VOCAB_PADDING_SIZE,
-    ParallelLMHead,
-)
+from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
 from vllm.model_executor.models.interfaces import SupportsMultiModal
 from vllm.model_executor.models.llama import (
     LlamaAttention,
     LlamaDecoderLayer,
-    LlamaForCausalLM,
     LlamaMLP,
     LlamaModel,
     RMSNorm,
 )
 from vllm.model_executor.models.utils import (
     AutoWeightsLoader,
-    PPMissingLayer,
     WeightsMapper,
     make_layers,
     maybe_prefix,
@@ -75,11 +69,6 @@ from .projector import AriaProjector
 from .vision_encoder import AriaVisionModel
 
 logger = logging.get_logger(__name__)
-
-_KEYS_TO_MODIFY_MAPPING = {
-    "language_model.lm_head": "lm_head",
-    "language_model.model": "language_model",
-}
 
 
 class AriaMoELMConfig(LlamaConfig):
@@ -379,107 +368,6 @@ class AriaMoELMModel(LlamaModel):
             prefix=f"{prefix}.layers",
         )
 
-    # def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
-
-
-class AriaMoELMForCausalLM(LlamaForCausalLM):
-    packed_modules_mapping = {
-        "qkv_proj": [
-            "q_proj",
-            "k_proj",
-            "v_proj",
-        ],
-        "gate_up_proj": [
-            "gate_proj",
-            "up_proj",
-        ],
-    }
-
-    # LoRA specific attributes
-    supported_lora_modules = [
-        "qkv_proj",
-        "o_proj",
-        "gate_up_proj",
-        "down_proj",
-        "embed_tokens",
-        "lm_head",
-    ]
-    embedding_modules = {
-        "embed_tokens": "input_embeddings",
-        "lm_head": "output_embeddings",
-    }
-    embedding_padding_modules = ["lm_head"]
-    bitsandbytes_stacked_params_mapping = {
-        # shard_name, weight_name, index
-        "q_proj": ("qkv_proj", 0),
-        "k_proj": ("qkv_proj", 1),
-        "v_proj": ("qkv_proj", 2),
-        "gate_proj": ("gate_up_proj", 0),
-        "up_proj": ("gate_up_proj", 1),
-    }
-    # Mistral/Llama models can also be loaded with --load-format mistral
-    # from consolidated.safetensors checkpoints
-    mistral_mapping = {
-        "layers": "model.layers",
-        "attention": "self_attn",
-        "wq": "q_proj",
-        "wk": "k_proj",
-        "wv": "v_proj",
-        "wo": "o_proj",
-        "attention_norm": "input_layernorm",
-        "feed_forward": "mlp",
-        "w1": "gate_proj",
-        "w2": "down_proj",
-        "w3": "up_proj",
-        "ffn_norm": "post_attention_layernorm",
-        "tok_embeddings": "model.embed_tokens",
-        "output": "lm_head",
-        "norm": "model.norm",
-    }
-
-    def __init__(
-        self,
-        config: LlamaConfig,
-        cache_config: Optional[CacheConfig] = None,
-        quant_config: Optional[QuantizationConfig] = None,
-        lora_config: Optional[LoRAConfig] = None,
-    ) -> None:
-        nn.Module.__init__(self)
-
-        self.config = config
-        self.lora_config = lora_config
-
-        self.model = AriaMoELMModel(
-            config, cache_config, quant_config, lora_config=lora_config, prefix="model"
-        )
-        if get_pp_group().is_last_rank:
-            self.unpadded_vocab_size = config.vocab_size
-            if lora_config:
-                self.unpadded_vocab_size += lora_config.lora_extra_vocab_size
-            self.lm_head = ParallelLMHead(
-                self.unpadded_vocab_size,
-                config.hidden_size,
-                org_num_embeddings=config.vocab_size,
-                padding_size=(
-                    DEFAULT_VOCAB_PADDING_SIZE
-                    # We need bigger padding if using lora for kernel
-                    # compatibility
-                    if not lora_config
-                    else lora_config.lora_vocab_padding_size
-                ),
-                quant_config=quant_config,
-            )
-            if config.tie_word_embeddings:
-                self.lm_head.weight = self.model.embed_tokens.weight
-
-            logit_scale = getattr(config, "logit_scale", 1.0)
-            self.logits_processor = LogitsProcessor(
-                self.unpadded_vocab_size, config.vocab_size, logit_scale
-            )
-            self.sampler = Sampler()
-        else:
-            self.lm_head = PPMissingLayer()
-
 
 def build_mm_projector(config):
     """
@@ -704,7 +592,6 @@ def input_processor(ctx, llm_inputs):
     )
 
 
-# adapted from transformers.models.llava.modeling_llava.LlavaForConditionalGeneration
 @MULTIMODAL_REGISTRY.register_max_image_tokens(get_max_multimodal_tokens)
 @MULTIMODAL_REGISTRY.register_image_input_mapper(input_mapper_for_aria)
 @INPUT_REGISTRY.register_input_processor(input_processor)

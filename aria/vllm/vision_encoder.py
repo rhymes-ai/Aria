@@ -1,9 +1,10 @@
-from vllm.model_executor.models.idefics2_vision_model import Idefics2VisionTransformer, Idefics2Encoder, Idefics2VisionEmbeddings
-from transformers.models.idefics2.configuration_idefics2 import Idefics2VisionConfig
 from typing import Optional, Tuple
-from vllm.config import QuantizationConfig
-import torch.nn as nn
+
 import torch
+import torch.nn as nn
+from transformers.models.idefics2.configuration_idefics2 import Idefics2VisionConfig
+from vllm.config import QuantizationConfig
+from vllm.model_executor.models.idefics2_vision_model import Idefics2VisionTransformer
 
 
 class AriaVisionConfig(Idefics2VisionConfig):
@@ -35,7 +36,7 @@ class AriaVisionTransformer(Idefics2VisionTransformer):
         super().__init__(config, quant_config, prefix)
         self.post_layernorm = IdentityOp()
 
-    
+
 class AriaVisionModel(nn.Module):
     config_class = AriaVisionConfig
 
