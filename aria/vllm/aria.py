@@ -71,10 +71,7 @@ from vllm.sequence import IntermediateTensors
 from vllm.utils import is_list_of
 
 from .vision_encoder import AriaVisionModel
-
-from aria.model.configuration_aria import AriaConfig
-from aria.model.projector import AriaProjector
-# from aria.model.vision_encoder import AriaVisionModel
+from .projector import AriaProjector
 
 logger = logging.get_logger(__name__)
 
@@ -478,7 +475,7 @@ class AriaMoELMForCausalLM(LlamaForCausalLM):
             self.lm_head = PPMissingLayer()
 
 
-def build_mm_projector(config: AriaConfig):
+def build_mm_projector(config):
     """
     Builds and returns an AriaProjector instance based on the provided configuration.
 
