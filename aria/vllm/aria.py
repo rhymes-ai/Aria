@@ -70,9 +70,11 @@ from vllm.multimodal.utils import (
 from vllm.sequence import IntermediateTensors
 from vllm.utils import is_list_of
 
+from .vision_encoder import AriaVisionModel
+
 from aria.model.configuration_aria import AriaConfig
 from aria.model.projector import AriaProjector
-from aria.model.vision_encoder import AriaVisionModel
+# from aria.model.vision_encoder import AriaVisionModel
 
 logger = logging.get_logger(__name__)
 
@@ -773,11 +775,10 @@ class AriaForConditionalGeneration(nn.Module, SupportsMultiModal):
                 torch.bfloat16
             )
             pixel_mask = pixel_mask.view(-1, *pixel_mask.shape[-2:])
-            image_outputs, image_attn_mask = self.vision_tower(
+            selected_image_feature, image_attn_mask = self.vision_tower(
                 pixel_values,
                 pixel_mask=pixel_mask,
             )
-            selected_image_feature = image_outputs.last_hidden_state
 
             image_features = self.multi_modal_projector(
                 selected_image_feature, attn_mask=image_attn_mask
@@ -834,13 +835,14 @@ class AriaForConditionalGeneration(nn.Module, SupportsMultiModal):
             shard_id = None
             # Because we used the origin hf vit and vision projector, we cound keep the weight in the sharded shape.
             # Only for the language model part needs to adjust the weight loading.
-            if "language_model" in name:
+            if "language_model" in name or "vision_tower" in name:
                 for param_name, weight_name, _shard_id in stacked_params_mapping:
                     if weight_name not in name:
                         continue
                     name = name.replace(weight_name, param_name)
                     shard_id = _shard_id
                     break
+            
 
             param = params_dict[name]
             weight_loader = getattr(param, "weight_loader", default_weight_loader)
