@@ -93,16 +93,11 @@ pip install -e .[vllm]
 from PIL import Image
 from transformers import AutoTokenizer
 from vllm import LLM, ModelRegistry, SamplingParams
-from vllm.model_executor.models import _MULTIMODAL_MODELS
 
 from aria.vllm.aria import AriaForConditionalGeneration
 
 ModelRegistry.register_model(
     "AriaForConditionalGeneration", AriaForConditionalGeneration
-)
-_MULTIMODAL_MODELS["AriaForConditionalGeneration"] = (
-    "aria",
-    "AriaForConditionalGeneration",
 )
 
 
@@ -147,7 +142,7 @@ def main():
                     Image.open("assets/princess2.jpg"),
                 ],
                 "max_image_size": 980,  # [Optional] The max image patch size, default `980`
-                "split_image": True,  # [Optional] whether to split the images, default `False`
+                "split_image": False,  # [Optional] whether to split the images, default `False`
             },
         },
         sampling_params=SamplingParams(max_tokens=200, top_k=1, stop=["<|im_end|>"]),
