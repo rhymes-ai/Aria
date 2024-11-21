@@ -637,9 +637,6 @@ class MoELayer(nn.Module):
     This layer implements the MoE mechanism, which routes input tokens to different experts
     based on a routing algorithm, processes them through the experts, and then combines
     the outputs.
-
-    Args:
-        config (AriaMoELMConfig): Configuration object for the MoE layer.
     """
 
     def __init__(
@@ -680,10 +677,6 @@ class MoEDecoderLayer(LlamaDecoderLayer):
     """
     Custom Decoder Layer for the AriaMoE model which modifies the standard `LlamaDecoderLayer` by
     replacing the traditional MLP with a Mixture of Experts (MoE) Layer.
-
-    Args:
-        config (LlamaConfig): Configuration object for the layer.
-        layer_idx (int): Index of the current layer in the model.
     """
 
     def __init__(
@@ -736,12 +729,6 @@ class AriaMoELMModel(LlamaModel):
     """
     Custom LlamaModel for the AriaMoE model which modifies the standard LlamaModel by
     replacing the `LlamaDecoderLayer` with `MoEDecoderLayer`.
-
-    This model implements a Mixture of Experts (MoE) approach, where each layer contains
-    multiple expert networks that specialize in different aspects of the input.
-
-    Args:
-        config (LlamaConfig): Configuration object for the model.
     """
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
@@ -751,7 +738,7 @@ class AriaMoELMModel(LlamaModel):
         cache_config = vllm_config.cache_config
         quant_config = vllm_config.quant_config
 
-        # FIXME(zhoufan): this is a hack to avoid the error: AttributeError: 'AriaMoELMModel' object has no attribute 'do_not_compile'.
+        # FIXME: this is a hack to disable the compilation of the model
         self.do_not_compile = True
 
         self.layers = None
