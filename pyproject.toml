@@ -31,9 +31,6 @@ dev = [
     "isort==5.13.2",
     "pytest==8.3.3",
 ]
-vllm = [
-    "vllm==0.6.4.post1"
-]
 grouped_gemm = [
     "grouped_gemm==0.1.6"
 ]
