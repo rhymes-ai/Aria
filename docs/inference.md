@@ -78,8 +78,10 @@ python aria/inference.py --help
 This method leverages vLLM for high-performance inference, particularly useful for scenarios requiring parallel processing or handling multiple requests.
 
 ### Install vLLM:
+
+Install the latest version of vLLM:
 ```bash
-pip install -e .[vllm]
+pip install https://vllm-wheels.s3.us-west-2.amazonaws.com/nightly/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl
 ```
 
 ### How to Use:
@@ -92,23 +94,14 @@ pip install -e .[vllm]
 ```python
 from PIL import Image
 from transformers import AutoTokenizer
-from vllm import LLM, ModelRegistry, SamplingParams
-
-from aria.vllm.aria import AriaForConditionalGeneration
-
-ModelRegistry.register_model(
-    "AriaForConditionalGeneration", AriaForConditionalGeneration
-)
+from vllm import LLM, SamplingParams
 
 
 def main():
     llm = LLM(
         model="rhymes-ai/Aria",
-        tokenizer="rhymes-ai/Aria",
         tokenizer_mode="slow",
         dtype="bfloat16",
-        limit_mm_per_prompt={"image": 256},
-        enforce_eager=True,
         trust_remote_code=True,
     )
 
