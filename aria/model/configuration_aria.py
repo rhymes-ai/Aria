@@ -66,12 +66,13 @@ class AriaConfig(PretrainedConfig):
         },
         ignore_index=-100,
         image_token_index=32000,
+        tie_word_embeddings=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.ignore_index = ignore_index
         self.image_token_index = image_token_index
-
+        self.tie_word_embeddings = tie_word_embeddings
         attn_implementation = kwargs.pop("attn_implementation", None)
 
         # Set the default attention implementation to flash_attention_2 if not specified
