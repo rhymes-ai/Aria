@@ -164,6 +164,14 @@ class AriaForConditionalGeneration(AriaPretrainedModel, GenerationMixin):
     def set_input_embeddings(self, value):
         """Set the input embeddings for the language model."""
         self.language_model.set_input_embeddings(value)
+    
+    def get_output_embeddings(self):
+        """Retrieve the output embeddings from the language model."""
+        return self.language_model.get_output_embeddings()
+    
+    def set_output_embeddings(self, value):
+        """Set the output embeddings for the language model."""
+        self.language_model.set_output_embeddings(value)
 
     def set_moe_z_loss_coeff(self, value):
         """
