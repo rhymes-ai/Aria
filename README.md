@@ -14,7 +14,9 @@ Aria is a multimodal native MoE model. It features:
   
 
 ## News
-- 2024.10.10: We release Aria!
+- [Dec 1, 2024] We release the base models for Aria ([Aria-Base-8K](https://huggingface.co/rhymes-ai/Aria-Base-8K) and [Aria-Base-64K](https://huggingface.co/rhymes-ai/Aria-Base-64K))! They are fully compatible with this inference \& fine-tuning codebase. 
+
+- [Oct 10, 2024] We release Aria!
 
 ## Quick Start
 
@@ -99,7 +101,19 @@ We offer both LoRA fine-tuning and full parameter tuning, using various dataset 
 - Video datasets
 - Code datasets
 
-For a quick try, visit the [examples](./examples) folder and choose one of the fine-tuning examples.
+For a quick try, visit the [examples](./examples) folder and choose one of the fine-tuning examples. If you would like to fine-tune from base models (recommended when you have a large database), please change the following model paths in the configs ([full](recipes/config_full.yaml) or [lora](recipes/config_lora.yaml))
+
+```yaml
+model_name_or_path: rhymes-ai/Aria
+tokenizer_path: rhymes-ai/Aria
+```
+
+to the ones corresponding to one of the base models:
+
+```yaml
+model_name_or_path: rhymes-ai/Aria-Base-64K # rhymes-ai/Aria-Base-8K
+tokenizer_path: rhymes-ai/Aria-Base-64K # rhymes-ai/Aria-Base-8K
+```
 
 ### Prepare dataset
 Please refer to [custom_dataset.md](docs/custom_dataset.md) for how to prepare your dataset.
