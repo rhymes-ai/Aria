@@ -46,11 +46,10 @@ from PIL import Image
 from transformers import AutoModelForCausalLM, AutoProcessor
 
 model_id_or_path = "rhymes-ai/Aria"
-revision = "4844f0b5ff678e768236889df5accbe4967ec845"
 
-model = AutoModelForCausalLM.from_pretrained(model_id_or_path, revision=revision, device_map="auto", torch_dtype=torch.bfloat16, trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(model_id_or_path, device_map="auto", torch_dtype=torch.bfloat16, trust_remote_code=True)
 
-processor = AutoProcessor.from_pretrained(model_id_or_path, revision=revision, trust_remote_code=True)
+processor = AutoProcessor.from_pretrained(model_id_or_path, trust_remote_code=True)
 
 image_path = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png"
 
