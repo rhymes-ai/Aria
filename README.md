@@ -14,6 +14,8 @@ Aria is a multimodal native MoE model. It features:
   
 
 ## News
+- [Jan 20, 2025] 🚀🚀🚀 Aria is supported in [PaddleMIX](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/examples/aria) by Paddle Team.
+
 - [Dec 15, 2024] We release [Aria-Chat](https://huggingface.co/rhymes-ai/Aria-Chat)! It is optimized for open-ended and multi-round dialogs, with enhanced reliability and multi-lingual support.
 
 - [Dec 1, 2024] We release the base models for Aria ([Aria-Base-8K](https://huggingface.co/rhymes-ai/Aria-Base-8K) and [Aria-Base-64K](https://huggingface.co/rhymes-ai/Aria-Base-64K))! They are fully compatible with this inference \& fine-tuning codebase. 
