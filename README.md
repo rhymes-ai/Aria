@@ -6,6 +6,7 @@
 🌐 [WebDemo](https://rhymes.ai/)  | 
 🟣 [Discord](https://discord.com/invite/u8HxU23myj)
 
+
 ## Introduction
 Aria is a multimodal native MoE model. It features:
 - State-of-the-art performance on various multimodal and language tasks, superior in video and document understanding;
@@ -93,6 +94,10 @@ We offer additional inference methods, such as utilizing [vLLM](https://github.c
 Checkout these [inference examples](https://github.com/rhymes-ai/Aria/tree/main/inference/notebooks) that demonstrate how to use Aria on various applications such as chart understanding, PDF reading, video understanding, etc, available with both Hugging Face Transformers and [vLLM](https://github.com/vllm-project/vllm) backends.
 
 ## Fine-tuning
+> ⚠️ **Important Note on Fine-tuning**: Due to changes in the weight mapping after Aria's integration into transformers, the training code requires specific versions to work properly:
+> - Use transformers version 4.45.0
+> - Use model revision "4844f0b5ff678e768236889df5accbe4967ec845"
+
 
 > **Note:** For optimal fine-tuning performance, install the optional `grouped_gemm` dependency:
 > ```bash
