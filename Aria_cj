@@ -1,0 +1,2 @@
+model_name_or_path: rhymes-ai/Aria-Base-64K # rhymes-ai/Aria-Base-8K
+tokenizer_path: rhymes-ai/Aria-Base-64K # rhymes-ai/Aria-Base-8K
